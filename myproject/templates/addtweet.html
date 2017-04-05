@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Post tweet</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    function post(){
+        var content = $("#content").val();
+        $.ajax({
+            type: "POST",
+            url: "/additem",
+            contentType: "application/json",
+            data: JSON.stringify({content: content}),
+            success: function (result) {
+                alert(result);
+            }
+        });
+    }
+    </script>
+</head>
+<body>
+   <form action="javascript:post();">
+        <p> Content: </p>
+        <input type="text" id="content"><br>
+        <input type="submit" value="Post">
+   </form>
+</body>
+</html>

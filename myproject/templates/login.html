@@ -1,0 +1,32 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Log in</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    function login(){
+        var username = $("#username").val();
+        var password = $("#password").val();
+        $.ajax({
+            type: "POST",
+            url: "/login",
+            contentType: "application/json",
+            data: JSON.stringify({username: username, password: password}),
+            success: function (result) {
+                alert(result);
+            }
+        });
+    }
+    </script>
+</head>
+<body>
+   <form action="javascript:login();">
+        <p> Username: </p>
+        <input type="text" id="username"><br>
+        <p> Password: </p>
+        <input type="password" id ="password"><br>
+        <input type="submit" value="Login">
+   </form>
+</body>
+</html>
+

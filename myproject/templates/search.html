@@ -1,0 +1,32 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Log in</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    function login(){
+        var timestamp = $("#timestamp").val();
+        var limit = $("#limit").val();
+        $.ajax({
+            type: "POST",
+            url: "/search",
+            contentType: "application/json",
+            data: JSON.stringify({timestamp: timestamp, limit: limit}),
+            success: function (result) {
+                alert(JSON.stringify(result));
+            }
+        });
+    }
+    </script>
+</head>
+<body>
+   <form action="javascript:login();">
+        <p> Timestamp: </p>
+        <input type="text" id="timestamp"><br>
+        <p> Limit: </p>
+        <input type="text" id ="limit"><br>
+        <input type="submit" value="Search">
+   </form>
+</body>
+</html>
+

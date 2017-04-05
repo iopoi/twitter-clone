@@ -1,0 +1,26 @@
+server {
+        listen 80;
+#        location /hw0.html/ {
+#		default_type "text/html";
+#		alias /home/webpage/;
+#		index hw0.html;
+#        }
+#        location /hw1.yml {
+#		default_type "text/html";
+#		alias /home/webpage/;
+#		index hw1.yml;
+#        }
+	
+
+#	location /eliza {
+#		proxy_pass http://127.0.0.1:5000;
+#		proxy_http_version 1.1;
+#	}
+	location / {
+		proxy_pass http://127.0.0.1:5000;
+		proxy_http_version 1.1;
+#		alias /home/timmy/flask/;
+		alias /home/timmy/cloud-project/;
+	}
+
+}

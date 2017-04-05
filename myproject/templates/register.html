@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    function register(){
+        var username = $("#username").val();
+        var password = $("#password").val();
+        var email = $("#email").val();
+        $.ajax({
+            type: "POST",
+            url: "/adduser",
+            contentType: "application/json",
+            data: JSON.stringify({username: username, password: password, email: email}),
+            success: function (result) {
+                alert(result);
+            }
+        });
+    }
+    </script>
+</head>
+<body>
+   <form action="javascript:register();">
+        <p> Username: </p>
+        <input type="text" id="username"><br>
+        <p> Password: </p>
+        <input type="text" id ="password"><br>
+        <p> Email: </p>
+        <input type="text" id ="email"><br>
+        <input type="submit" value="Register">
+   </form>
+</body>
+</html>

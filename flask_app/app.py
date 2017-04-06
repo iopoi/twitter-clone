@@ -1,11 +1,12 @@
 import json
-from tools import connection, error_msg, success_msg, randomString, sendemail
+#from tools import connection, error_msg, success_msg, randomString, sendemail
 from flask import Flask, request, make_response, render_template
 from datetime import datetime
-from MySQLdb import escape_string as thwart
+#from MySQLdb import escape_string as thwart
 
 app = Flask(__name__)
 
+# TODO - move tables into mongo
 cookies = dict()
 verify_key = dict()
 
@@ -21,6 +22,7 @@ def adduser():
     username = request_json['username']
     email = request_json['email']
     password = request_json['password']
+    # TODO - add mongo support
     c, conn = connection()
     x = c.execute("SELECT * FROM user WHERE username = (%s) or email = (%s);", (username, email))
     if x != 0:
@@ -43,6 +45,7 @@ def login():
     request_json = request.json
     username = request_json['username']
     password = request_json['password']
+    # TODO - add mongo support
     c, conn = connection()
     x = c.execute("SELECT uid FROM user WHERE username = (%s) and password = (%s) and disable =False", (username, password))
     if x != 1:
@@ -60,6 +63,7 @@ def logout():
     cookie = request.cookies.get('cookie')
     if not cookie:
         return "Not logged in!"
+    # TODO - update mongo tables
     cookies.pop(cookie)
     return success_msg({})
 
@@ -70,10 +74,12 @@ def verify():
     request_json = request.json   
     email = request_json['email']
     key = request_json['key']
+    # TODO - check mongo tables
     global verify_key
     if verify_key.get(email) != key and key != 'abracadabra':
         return error_msg({'error': 'wrong combination!'})
     verify_key.pop(email)
+    # TODO - add mongo support
     c, conn = connection()
     c.execute("UPDATE user SET disable = False where email = (%s)", (email,))
     conn.commit()
@@ -85,6 +91,7 @@ def verify():
 def additem():
     if request.method == 'GET':
         return render_template('addtweet.html')
+    # TODO - check mongo tables
     global cookies
     request_json = request.json
     post_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -94,6 +101,7 @@ def additem():
         uid = cookies[cookie]
     except:
         return error_msg({"error": "not logged in"})
+    # TODO - add mongo support
     c, conn = connection()
     c.execute("INSERT INTO tweet (uid, content, time) VALUES (%s, %s, %s)", (uid, content, post_time))
     tid = c.lastrowid
@@ -105,6 +113,7 @@ def additem():
 @app.route('/item/<tid>', methods = ['GET'])
 def item(tid):
     tid = int(tid)
+    # TODO - add mongo support
     c, conn = connection()
     c.execute("SELECT t.tid, u.username, t.content, t.time from tweet t, user u where u.uid = t.uid and t.tid = (%s);", (tid,))
     a = c.fetchone()
@@ -125,6 +134,7 @@ def search():
     #limit = request_json.get('limit', 25)
     if limit > 100:
         limit = 25
+    # TODO - add mongo support
     c, conn = connection()
     c.execute("SELECT t.tid, u.username, t.content, t.time from user u, tweet t where u.uid = t.uid order by t.time desc limit %s;", (limit,))
     data = c.fetchall()

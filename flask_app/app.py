@@ -189,7 +189,7 @@ def verify():
     user['email'] = docs[0]['email']
     user['password'] = docs[0]['password']
     user['verified'] = True
-    result = coll_user.replace_one(user)
+    result = user_coll.replace_one(user)
     mc.close()
     return success_msg({})
 

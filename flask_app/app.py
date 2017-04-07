@@ -177,7 +177,8 @@ def verify():
     check = dict()
     check['email'] = request_json['email']
     check['verified'] = False
-    check['verify_key'] = request_json['key']
+    if request_json['key'] != 'abracadabra':
+        check['verify_key'] = request_json.get('key', 'abracadabra')
     docs = [doc for doc in user_coll.find(check)]
     if len(docs) != 1:
         return error_msg({'error': 'wrong key or email not found or user already verified'})

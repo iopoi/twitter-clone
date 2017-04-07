@@ -102,8 +102,10 @@ def login():
     check = dict()
     check['username'] = request_json['username']
     check['password'] = request_json['password']
-    check['verify'] = True
+    check['verified'] = True
     docs = [doc for doc in user_coll.find(check)]
+    print('login - docs')  # debug
+    print(docs)  #debug
     if len(docs) != 1:
         return error_msg({'error': 'incorrect password or user not verified or user does not exist'})
     # login user
@@ -117,7 +119,7 @@ def login():
     #cookies[login['session']] = login['uid']
     mc.close()
     resp = make_response(success_msg({}))
-    resp.set_cookie('cookie', cookie)
+    resp.set_cookie('cookie', login['session'])
     return resp
     
    # global cookies
@@ -183,13 +185,15 @@ def verify():
     if len(docs) != 1:
         return error_msg({'error': 'wrong key or email not found or user already verified'})
     # verifiy user
+    Oid = docs[0]['_id']
     user = dict()
-    user['_id'] = docs[0]['_id']
+#    user['_id'] = docs[0]['_id']
     user['username'] = docs[0]['username']
     user['email'] = docs[0]['email']
     user['password'] = docs[0]['password']
     user['verified'] = True
-    result = user_coll.replace_one(user)
+    print(user)
+    result = user_coll.replace_one({'_id': Oid}, user)
     mc.close()
     return success_msg({})
 

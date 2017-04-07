@@ -317,36 +317,145 @@ def search():
     if request.method == 'GET':
         return render_template('search.html')
 
-
     request_json = request.json
-    timestamp = request_json.get('timestamp')
-    if timestamp:
-        timestamp = datetime.fromtimestamp(float(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
-        #timestamp = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-    else:
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    tweet_coll = mc.twitterclone.tweet
+    # timestamp = request_json.get('timestamp')
+    # if timestamp:
+    #     timestamp = datetime.fromtimestamp(float(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
+    #     #timestamp = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+    # else:
+    #     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # get default values
+    timestamp = int(request_json.get('timestamp', datetime.now().strftime('%S')))
     limit = int(request_json.get('limit', 25))
-    #limit = request_json.get('limit', 25)
     if limit > 100:
         limit = 25
-    # TODO - add mongo support
-    c, conn = connection()
-    c.execute("SELECT t.tid, u.username, t.content, t.time from user u, tweet t where u.uid = t.uid order by t.time desc limit %s;", (limit,))
-    data = c.fetchall()
-    items = []
-    for a in data:
-        items.append({"id": a[0], "username": a[1], "content": a[2], "timestamp": int(a[3].timestamp())})
-    return success_msg({"items": items, "number": len(items)})
+    q = request_json.get('q', None)
+    username = request_json.get('username', None)
+    following = request_json.get('following', None)
+
+    # form query M1
+    check = dict()
+    if timestamp is not None:
+        check['timestamp'] = {"$gt": timestamp}
+    sort = list()
+    sort.append(("timestamp", pymongo.ASCENDING))
+
+    docs = [doc for doc in tweet_coll.find(check).sort(sort)]
+    if len(docs) == 0:
+        return error_msg({'error': 'user not found'})
+    tids = [doc['_id'] for doc in docs]
+
+    # return 
+    mc.close()
+    other_response_fields = dict()
+    other_response_fields['items'] = tids[limit:]
+    return success_msg(other_response_fields)
+
+    # # TODO - add mongo support
+    # c, conn = connection()
+    # c.execute("SELECT t.tid, u.username, t.content, t.time from user u, tweet t where u.uid = t.uid order by t.time desc limit %s;", (limit,))
+    # data = c.fetchall()
+    # items = []
+    # for a in data:
+    #     items.append({"id": a[0], "username": a[1], "content": a[2], "timestamp": int(a[3].timestamp())})
+    # return success_msg({"items": items, "number": len(items)})
 
 
 @app.route('/user/<username>', methods = ['GET'])
 def user():
+    mc = MongoClient(mongo_server)
+    user_coll = mc.twitterclone.user
+    following_coll = mc.twitterclone.following
+    followers_coll = mc.twitterclone.followers
+    # get uid from username
+    check = dict()
+    check['username'] = username
+    docs = [doc for doc in user_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': 'user not found'})
+    uid = docs[0]['uid']
+    email = docs[0]['email']
+    # get followers
+    check = dict()
+    check['uid'] = uid
+    docs = [doc for doc in followers_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': 'user not found'})
+    followers_num = len(docs[0]['followers'])
+    # get following
+    docs = [doc for doc in following_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': 'user not found'})
+    following_num = len(docs[0]['following'])
+    # return email followers and following
+    mc.close()
+    user_parts = dict()
+    user_parts['email'] = email
+    user_parts['followers'] = followers_num
+    user_parts['following'] = following_num
+    other_response_fields = dict()
+    other_response_fields['user'] = user_parts
+    return success_msg(other_response_fields)
 
 @app.route('/user/<username>/followers', methods = ['GET'])
 def followers():
+    request_json = request.json  # get json
+    mc = MongoClient(mongo_server)
+    user_coll = mc.twitterclone.user
+    followers_coll = mc.twitterclone.followers
+    # get uid from username
+    check = dict()
+    check['username'] = username
+    docs = [doc for doc in user_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': 'user not found'})
+    uid = docs[0]['uid']
+    # get followers
+    check = dict()
+    check['uid'] = uid
+    docs = [doc for doc in followers_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': 'user not found'})
+    followers = docs[0]['followers']
+    # return email followers and following
+    limit = int(request_json.get('limit', 50))
+    if limit > 200:
+        limit = 200
+    mc.close()
+    other_response_fields = dict()
+    other_response_fields['users'] = followers[limit:]
+    return success_msg(other_response_fields)
 
 @app.route('/user/<username>/following', methods = ['GET'])
 def following():
+    request_json = request.json  # get json
+    mc = MongoClient(mongo_server)
+    user_coll = mc.twitterclone.user
+    following_coll = mc.twitterclone.followers
+    # get uid from username
+    check = dict()
+    check['username'] = username
+    docs = [doc for doc in user_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': 'user not found'})
+    uid = docs[0]['uid']
+    # get followers
+    check = dict()
+    check['uid'] = uid
+    docs = [doc for doc in following_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': 'user not found'})
+    following = docs[0]['followers']
+    # return email followers and following
+    limit = int(request_json.get('limit', 50))
+    if limit > 200:
+        limit = 200
+    mc.close()
+    other_response_fields = dict()
+    other_response_fields['users'] = following[limit:]
+    return success_msg(other_response_fields)
 
 @app.route('/follow', methods = ['POST'])
 def follow():

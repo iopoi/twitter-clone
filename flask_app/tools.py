@@ -1,4 +1,4 @@
-import MySQLdb
+#import MySQLdb
 import random
 import json
 import smtplib

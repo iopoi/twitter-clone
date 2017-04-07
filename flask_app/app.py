@@ -1,8 +1,10 @@
 import json
-#from tools import connection, error_msg, success_msg, randomString, sendemail
+from tools import error_msg, success_msg, randomString #, sendemail
 from flask import Flask, request, make_response, render_template
 from datetime import datetime
 #from MySQLdb import escape_string as thwart
+import pymongo
+from pymongo import MongoClient
 
 app = Flask(__name__)
 
@@ -10,55 +12,134 @@ app = Flask(__name__)
 cookies = dict()
 verify_key = dict()
 
+mongo_server = 'mongodb://192.168.1.35:27017/'
+
 @app.route('/', methods = ['GET'])
-def indes():
+def index():
     return render_template('index.html')
 
 @app.route('/adduser', methods = ["POST", "GET"])
 def adduser():
     if request.method == 'GET':
         return render_template('register.html')
-    request_json = request.json
-    username = request_json['username']
-    email = request_json['email']
-    password = request_json['password']
-    # TODO - add mongo support
-    c, conn = connection()
-    x = c.execute("SELECT * FROM user WHERE username = (%s) or email = (%s);", (username, email))
-    if x != 0:
-        return error_msg({'error': 'username or emial already used'})
-    c.execute("INSERT INTO user (username, password, email, disable) VALUES (%s, %s, %s, True)", (username, password, email))
-    conn.commit()
-    c.close()
-    conn.close()
-    global verify_key
-    key = randomString()
-    verify_key[email] = key
-    sendemail(key, email)
+    # connect
+    client = MongoClient(mongo_server)  # connect to server
+    db = client.twitterclone  # connect to db
+    coll_user = db.user  # connect to collection
+    request_json = request.json  # get json
+    # check for existing user or email
+    user_check = dict()
+    user_check["$or"] = [{'username': request_json['username']},
+                         {'email': request_json['email']}]
+    cursor = coll_user.find(user_check)
+    docs = [doc for doc in cursor]
+    if len(docs) > 0:
+        return error_msg({'error': 'username or email already used'})
+    # insert new user
+    user_new = dict()
+    user_new['username'] = request_json['username']
+    user_new['email'] = request_json['email']
+    user_new['password'] = request_json['password']
+    user_new['verified'] = False
+    user_new['verify_key'] = randomString()
+    coll_user.insert_one(user_new)
+    # optional - user app key verification
+    #global verify_key
+    #verify_key[email] = user_new['verify_key']
+    #sendemail(key, email)
+    client.close()
     return success_msg({})
+
+#    c, conn = connection()
+#    x = c.execute("SELECT * FROM user WHERE username = (%s) or email = (%s);", (username, email))
+#    if x != 0:
+#        return error_msg({'error': 'username or emial already used'})
+#    c.execute("INSERT INTO user (username, password, email, disable) VALUES (%s, %s, %s, True)", (username, password, email))
+#    conn.commit()
+#    c.close()
+#    conn.close()
+#    global verify_key
+#    key = randomString()
+#    verify_key[email] = key
+#    sendemail(key, email)
+#    return success_msg({})
 
 @app.route('/login', methods = ['POST', "GET"])
 def login():
     if request.method == 'GET':
         return render_template('login.html')
-    global cookies
-    request_json = request.json
-    username = request_json['username']
-    password = request_json['password']
-    # TODO - add mongo support
-    c, conn = connection()
-    x = c.execute("SELECT uid FROM user WHERE username = (%s) and password = (%s) and disable =False", (username, password))
-    if x != 1:
-        return error_msg({})
-    uid = c.fetchone()[0]
-    cookie = randomString()
-    cookies[cookie] = uid
+
+    request_json = request.json  # get json
+    # connect to user and login collections
+    user_coll = MongoClient(mongo_server).twitterclone.user
+    login_coll = MongoClient(mongo_server).twitterclone.login
+    # check for existing verified user
+    check = dict()
+    check['username'] = request_json['username']
+    check['password'] = request_json['password']
+    check['verify'] = True
+    docs = [doc for doc in user_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': 'incorrect password or user not verified or user does not exist'})
+    # login user
+    login = dict()
+    login['uid'] = docs[0]['_id']
+    login['session'] = randomString()
+    login['last_login'] = datetime.utcnow()
+    login_coll.insert_one(login)
+    # optional - login app cookies
+    #global cookies
+    #cookies[login['session']] = login['uid']
+    client.close()
+    resp = make_response(success_msg({}))
+    resp.set_cookie('cookie', cookie)
+    return resp
+    
+   # global cookies
+   # c, conn = connection()
+   # x = c.execute("SELECT uid FROM user WHERE username = (%s) and password = (%s) and disable =False", (username, password))
+   # if x != 1:
+   #     return error_msg({})
+   # uid = c.fetchone()[0]
+   # cookie = randomString()
+   # cookies[cookie] = uid
+   # resp = make_response(success_msg({}))
+   # resp.set_cookie('cookie', cookie)
+   # return resp
+
+@app.route('/logout', methods = ['POST', 'GET'])
+def logout():
+    if request.method == 'GET':
+        return render_template('login.html')
+
+    request_json = request.json  # get json
+    # connect to user and login collections
+    user_coll = MongoClient(mongo_server).twitterclone.user
+    login_coll = MongoClient(mongo_server).twitterclone.login
+    # check for existing verified user
+    check = dict()
+    check['username'] = request_json['username']
+    check['password'] = request_json['password']
+    check['verify'] = True
+    docs = [doc for doc in user_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': 'incorrect password or user not verified or user does not exist'})
+    # login user
+    login = dict()
+    login['uid'] = docs[0]['_id']
+    login['session'] = randomString()
+    login['last_login'] = datetime.utcnow()
+    login_coll.insert_one(login)
+    # optional - login app cookies
+    #global cookies
+    #cookies[login['session']] = login['uid']
+    client.close()
     resp = make_response(success_msg({}))
     resp.set_cookie('cookie', cookie)
     return resp
 
-@app.route('/logout', methods = ['POST', 'GET'])
-def logout():
+
+
     global cookies
     cookie = request.cookies.get('cookie')
     if not cookie:

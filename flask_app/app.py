@@ -9,8 +9,7 @@ from pymongo import MongoClient
 app = Flask(__name__)
 
 # TODO - move tables into mongo
-cookies = dict()
-verify_key = dict()
+#cookies = dict()
 
 mongo_server = 'mongodb://192.168.1.35:27017/'
 
@@ -22,33 +21,57 @@ def index():
 def adduser():
     if request.method == 'GET':
         return render_template('register.html')
-    # connect
-    client = MongoClient(mongo_server)  # connect to server
-    db = client.twitterclone  # connect to db
-    coll_user = db.user  # connect to collection
+
     request_json = request.json  # get json
-    # check for existing user or email
-    user_check = dict()
-    user_check["$or"] = [{'username': request_json['username']},
+    # connect to user collection
+    mc = MongoClient(mongo_server)
+    user_coll = mc.twitterclone.user
+    # check for existing verified user
+    check = dict()
+    check["$or"] = [{'username': request_json['username']},
                          {'email': request_json['email']}]
-    cursor = coll_user.find(user_check)
-    docs = [doc for doc in cursor]
+    docs = [doc for doc in user_coll.find(check)]
     if len(docs) > 0:
         return error_msg({'error': 'username or email already used'})
     # insert new user
-    user_new = dict()
-    user_new['username'] = request_json['username']
-    user_new['email'] = request_json['email']
-    user_new['password'] = request_json['password']
-    user_new['verified'] = False
-    user_new['verify_key'] = randomString()
-    coll_user.insert_one(user_new)
-    # optional - user app key verification
-    #global verify_key
-    #verify_key[email] = user_new['verify_key']
+    user = dict()
+    user['username'] = request_json['username']
+    user['email'] = request_json['email']
+    user['password'] = request_json['password']
+    user['verified'] = False
+    user['verify_key'] = randomString()
+    result = coll_user.insert_one(user)
     #sendemail(key, email)
-    client.close()
+    mc.close()
     return success_msg({})
+
+    # # connect
+    # client = MongoClient(mongo_server)  # connect to server
+    # db = client.twitterclone  # connect to db
+    # coll_user = db.user  # connect to collection
+    # request_json = request.json  # get json
+    # # check for existing user or email
+    # user_check = dict()
+    # user_check["$or"] = [{'username': request_json['username']},
+    #                      {'email': request_json['email']}]
+    # cursor = coll_user.find(user_check)
+    # docs = [doc for doc in cursor]
+    # if len(docs) > 0:
+    #     return error_msg({'error': 'username or email already used'})
+    # # insert new user
+    # user_new = dict()
+    # user_new['username'] = request_json['username']
+    # user_new['email'] = request_json['email']
+    # user_new['password'] = request_json['password']
+    # user_new['verified'] = False
+    # user_new['verify_key'] = randomString()
+    # coll_user.insert_one(user_new)
+    # # optional - user app key verification
+    # #global verify_key
+    # #verify_key[email] = user_new['verify_key']
+    # #sendemail(key, email)
+    # client.close()
+    # return success_msg({})
 
 #    c, conn = connection()
 #    x = c.execute("SELECT * FROM user WHERE username = (%s) or email = (%s);", (username, email))
@@ -71,8 +94,9 @@ def login():
 
     request_json = request.json  # get json
     # connect to user and login collections
-    user_coll = MongoClient(mongo_server).twitterclone.user
-    login_coll = MongoClient(mongo_server).twitterclone.login
+    mc = MongoClient(mongo_server)
+    user_coll = mc.twitterclone.user
+    login_coll = mc.twitterclone.login
     # check for existing verified user
     check = dict()
     check['username'] = request_json['username']
@@ -86,11 +110,11 @@ def login():
     login['uid'] = docs[0]['_id']
     login['session'] = randomString()
     login['last_login'] = datetime.utcnow()
-    login_coll.insert_one(login)
+    result = login_coll.insert_one(login)
     # optional - login app cookies
     #global cookies
     #cookies[login['session']] = login['uid']
-    client.close()
+    mc.close()
     resp = make_response(success_msg({}))
     resp.set_cookie('cookie', cookie)
     return resp
@@ -112,93 +136,181 @@ def logout():
     if request.method == 'GET':
         return render_template('login.html')
 
-    request_json = request.json  # get json
+    session = request.cookies.get('cookie')  # get session
     # connect to user and login collections
-    user_coll = MongoClient(mongo_server).twitterclone.user
-    login_coll = MongoClient(mongo_server).twitterclone.login
-    # check for existing verified user
+    mc = MongoClient(mongo_server)
+    user_coll = mc.twitterclone.user
+    login_coll = mc.twitterclone.login
+    # check for logged in user
     check = dict()
-    check['username'] = request_json['username']
-    check['password'] = request_json['password']
-    check['verify'] = True
-    docs = [doc for doc in user_coll.find(check)]
-    if len(docs) != 1:
-        return error_msg({'error': 'incorrect password or user not verified or user does not exist'})
-    # login user
-    login = dict()
-    login['uid'] = docs[0]['_id']
-    login['session'] = randomString()
-    login['last_login'] = datetime.utcnow()
-    login_coll.insert_one(login)
-    # optional - login app cookies
+    check['session'] = session
+    docs = [doc for doc in login_coll.find(check)]
+    if docs != 1:
+        return error_msg({'error': 'not logged in'})
+    # logs out user
+    result = login_coll.delete_many(check)
+    # optional - logout app cookies
     #global cookies
-    #cookies[login['session']] = login['uid']
-    client.close()
-    resp = make_response(success_msg({}))
-    resp.set_cookie('cookie', cookie)
-    return resp
-
-
-
-    global cookies
-    cookie = request.cookies.get('cookie')
-    if not cookie:
-        return "Not logged in!"
-    # TODO - update mongo tables
-    cookies.pop(cookie)
+    #cookies.pop(cookie)
+    mc.close()
     return success_msg({})
+
+    # global cookies
+    # cookie = request.cookies.get('cookie')
+    # if not cookie:
+    #     return "Not logged in!"
+    # # TODO - update mongo tables
+    # cookies.pop(cookie)
+    # return success_msg({})
 
 @app.route('/verify', methods = ['POST', 'GET'])
 def verify():
     if request.method == 'GET':
         return render_template('verify.html')
-    request_json = request.json   
-    email = request_json['email']
-    key = request_json['key']
-    # TODO - check mongo tables
-    global verify_key
-    if verify_key.get(email) != key and key != 'abracadabra':
-        return error_msg({'error': 'wrong combination!'})
-    verify_key.pop(email)
-    # TODO - add mongo support
-    c, conn = connection()
-    c.execute("UPDATE user SET disable = False where email = (%s)", (email,))
-    conn.commit()
-    c.close()
-    conn.close()
+
+    request_json = request.json  # get json
+    # connect to user collection
+    mc = MongoClient(mongo_server)
+    user_coll = mc.twitterclone.user
+    # check for unverified email and matching key
+    check = dict()
+    check['email'] = request_json['email']
+    check['verified'] = False
+    check['verify_key'] = request_json['key']
+    docs = [doc for doc in user_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': 'wrong key or email not found or user already verified'})
+    # verifiy user
+    user = dict()
+    user['_id'] = docs[0]['_id']
+    user['username'] = docs[0]['username']
+    user['email'] = docs[0]['email']
+    user['password'] = docs[0]['password']
+    user['verified'] = True
+    result = coll_user.replace_one(user)
+    mc.close()
     return success_msg({})
+
+    # request_json = request.json   
+    # email = request_json['email']
+    # key = request_json['key']
+    # # TODO - check mongo tables
+    # global verify_key
+    # if verify_key.get(email) != key and key != 'abracadabra':
+    #     return error_msg({'error': 'wrong combination!'})
+    # verify_key.pop(email)
+    # # TODO - add mongo support
+    # c, conn = connection()
+    # c.execute("UPDATE user SET disable = False where email = (%s)", (email,))
+    # conn.commit()
+    # c.close()
+    # conn.close()
+    # return success_msg({})
 
 @app.route('/additem', methods = ['POST', 'GET'])
 def additem():
     if request.method == 'GET':
         return render_template('addtweet.html')
-    # TODO - check mongo tables
-    global cookies
-    request_json = request.json
-    post_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    content = request_json['content']
-    cookie = request.cookies.get('cookie')
-    try:
-        uid = cookies[cookie]
-    except:
-        return error_msg({"error": "not logged in"})
-    # TODO - add mongo support
-    c, conn = connection()
-    c.execute("INSERT INTO tweet (uid, content, time) VALUES (%s, %s, %s)", (uid, content, post_time))
-    tid = c.lastrowid
-    conn.commit()
-    c.close()
-    conn.close()
-    return success_msg({"id": tid})
 
-@app.route('/item/<tid>', methods = ['GET'])
+    request_json = request.json  # get json
+    session = request.cookies.get('cookie')  # get session
+    # connect to login and tweet collections
+    mc = MongoClient(mongo_server)
+    login_coll = mc.twitterclone.login
+    tweet_coll = mc.twitterclone.tweet
+    # check for session
+    # optional - login app cookies
+    #global cookies
+    #cookies[login['session']] = login['uid']
+    check = dict()
+    check['session'] = session
+    docs = [doc for doc in login_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': 'not logged in'})
+    # insert tweet
+    tweet = dict()
+    tweet['uid'] = docs[0]['uid']
+    tweet['content'] = request_json['content']
+    tweet['timestamp'] = datetime.utcnow()
+    result = tweet_coll.insert_one(tweet)
+    mc.close()
+    other_response_fields = dict()
+    other_response_fields['id'] = result.inserted_id
+    return success_msg(other_response_fields)
+
+    # # TODO - check mongo tables
+    # global cookies
+    # request_json = request.json
+    # post_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # content = request_json['content']
+    # cookie = request.cookies.get('cookie')
+    # try:
+    #     uid = cookies[cookie]
+    # except:
+    #     return error_msg({"error": "not logged in"})
+    # # TODO - add mongo support
+    # c, conn = connection()
+    # c.execute("INSERT INTO tweet (uid, content, time) VALUES (%s, %s, %s)", (uid, content, post_time))
+    # tid = c.lastrowid
+    # conn.commit()
+    # c.close()
+    # conn.close()
+    # return success_msg({"id": tid})
+
+@app.route('/item/<tid>', methods = ['GET', 'DELETE'])
 def item(tid):
-    tid = int(tid)
-    # TODO - add mongo support
-    c, conn = connection()
-    c.execute("SELECT t.tid, u.username, t.content, t.time from tweet t, user u where u.uid = t.uid and t.tid = (%s);", (tid,))
-    a = c.fetchone()
-    return success_msg({"item": {"id": a[0], "username": a[1], "content": a[2], "timestamp": int(a[3].timestamp())}})
+    if request.method == 'GET':
+        # connect to tweet and user collection
+        mc = MongoClient(mongo_server)
+        tweet_coll = mc.twitterclone.tweet
+        user_coll = mc.twitterclone.user
+        # check for tweet with tid
+        check = dict()
+        check['_id'] = tid
+        docs = [doc for doc in tweet_coll.find(check)]
+        if len(docs) != 1:
+            return error_msg({'error': 'incorrect tweet id'})
+        # respond with tweet
+        mc.close()
+        item_details = dict()
+        item_details['id'] = docs[0]['_id']
+        item_details['content'] = docs[0]['content']
+        item_details['timestamp'] = docs[0]['timestamp']
+        # check for user of tweet
+        check = dict()
+        check['_id'] = docs[0]['uid']
+        docs = [doc for doc in user_coll.find(check)]
+        if len(docs) != 1:
+            return error_msg({'error': 'database issue'})
+        item_details['username'] = docs[0]['username']
+        other_response_fields = dict()
+        other_response_fields['item'] = item_details
+        return success_msg(other_response_fields)
+
+    elif request.method == 'DELETE':
+        # connect to tweet collection
+        mc = MongoClient(mongo_server)
+        tweet_coll = mc.twitterclone.tweet
+        # check for tweet with tid
+        check = dict()
+        check['_id'] = tid
+        docs = [doc for doc in tweet_coll.find(check)]
+        if len(docs) != 1:
+            return error_msg({'error': 'incorrect tweet id'})
+        # delete tweet
+        result = tweet_coll.delete_many(check)
+        mc.close()
+        other_response_fields = dict()
+        return success_msg(other_response_fields)
+
+    return 405
+
+    # tid = int(tid)
+    # # TODO - add mongo support
+    # c, conn = connection()
+    # c.execute("SELECT t.tid, u.username, t.content, t.time from tweet t, user u where u.uid = t.uid and t.tid = (%s);", (tid,))
+    # a = c.fetchone()
+    # return success_msg({"item": {"id": a[0], "username": a[1], "content": a[2], "timestamp": int(a[3].timestamp())}})
 
 @app.route('/search', methods = ['GET','POST'])
 def search():

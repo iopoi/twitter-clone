@@ -316,7 +316,9 @@ def item(tid):
 def search():
     if request.method == 'GET':
         return render_template('search.html')
-    request_json = request.json   
+
+
+    request_json = request.json
     timestamp = request_json.get('timestamp')
     if timestamp:
         timestamp = datetime.fromtimestamp(float(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
@@ -335,6 +337,97 @@ def search():
     for a in data:
         items.append({"id": a[0], "username": a[1], "content": a[2], "timestamp": int(a[3].timestamp())})
     return success_msg({"items": items, "number": len(items)})
+
+
+@app.route('/user/<username>', methods = ['GET'])
+def user():
+
+@app.route('/user/<username>/followers', methods = ['GET'])
+def followers():
+
+@app.route('/user/<username>/following', methods = ['GET'])
+def following():
+
+@app.route('/follow', methods = ['POST'])
+def follow():
+    request_json = request.json  # get json
+    session = request.cookies.get('cookie')  # get session
+    # connect to login, user, following, and followers collections
+    mc = MongoClient(mongo_server)
+    login_coll = mc.twitterclone.login
+    user_coll = mc.twitterclone.user
+    following_coll = mc.twitterclone.following
+    followers_coll = mc.twitterclone.followers
+    # check for session
+    # optional - login app cookies
+    #global cookies
+    #cookies[login['session']] = login['uid']
+    check = dict()
+    check['session'] = session
+    docs = [doc for doc in login_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': 'not logged in'})
+    # get session uid
+    uid = docs[0]['uid']
+    # get follower id
+    check = dict()
+    check['username'] = request_json['username']
+    docs = [doc for doc in user_coll.find(check)]
+    if len(docs) != 1:
+        return error_msg({'error': "follower doesn't exist"})
+    fid = docs[0]['uid']
+
+    # add or remove follower
+    if request_json['follow'] == False:
+        # remove follower
+
+        # you have a list of people you are following
+        # to remove someone you follow
+        #   you must remove yourself from their followers list
+        check = dict()
+        check['uid'] = fid
+        docs = [doc for doc in followers_coll.find(check)]
+        if len(docs) != 1:
+            return error_msg({'error': "follower doesn't exist"})
+        followers = docs[0]['followers'].remove(uid)  # TODO must check if followers is a list()
+        check['$set'] = {'followers': followers}
+        result = followers_coll.update_one(check)
+        #   you also must remove them from your following list 
+        check['uid'] = uid
+        docs = [doc for doc in following_coll.find(check)]
+        if len(docs) != 1:
+            return error_msg({'error': "following doesn't exist"})
+        following = docs[0]['following'].remove(fid)  # TODO must check if following is a list()
+        check['$set'] = {'following': following}
+        result = following_coll.update_one(check)
+
+    else:
+        # add follower
+
+        # you have a list of people you are following
+        # to add a follower
+        #   you must add yourself to their followers list
+        check = dict()
+        check['uid'] = fid
+        docs = [doc for doc in followers_coll.find(check)]
+        if len(docs) != 1:
+            return error_msg({'error': "follower doesn't exist"})
+        followers = docs[0]['followers'].append(uid)  # TODO must check if followers is a list()
+        check['$set'] = {'followers': followers}
+        result = followers_coll.update_one(check)
+        #   you also must add them to your following list
+        check['uid'] = uid
+        docs = [doc for doc in following_coll.find(check)]
+        if len(docs) != 1:
+            return error_msg({'error': "following doesn't exist"})
+        following = docs[0]['following'].append(fid)  # TODO must check if following is a list()
+        check['$set'] = {'following': following}
+        result = following_coll.update_one(check)
+
+    mc.close()
+    other_response_fields = dict()
+    return success_msg(other_response_fields)
+
 
 if __name__ == '__main__':
     app.run(debug=True)

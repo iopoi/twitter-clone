@@ -2,6 +2,7 @@ import json
 from tools import error_msg, success_msg, randomString #, sendemail
 from flask import Flask, request, make_response, render_template
 from datetime import datetime
+import time, calendar
 #from MySQLdb import escape_string as thwart
 import pymongo
 from pymongo import MongoClient
@@ -109,7 +110,7 @@ def login():
     login = dict()
     login['uid'] = docs[0]['_id']
     login['session'] = randomString()
-    login['last_login'] = datetime.utcnow()
+    login['last_login'] = calendar.timegm(time.gmtime())
     result = login_coll.insert_one(login)
     # optional - login app cookies
     #global cookies
@@ -231,7 +232,7 @@ def additem():
     tweet = dict()
     tweet['uid'] = docs[0]['uid']
     tweet['content'] = request_json['content']
-    tweet['timestamp'] = datetime.utcnow()
+    tweet['timestamp'] = calendar.timegm(time.gmtime())
     result = tweet_coll.insert_one(tweet)
     mc.close()
     other_response_fields = dict()
@@ -327,7 +328,7 @@ def search():
     #     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     # get default values
-    timestamp = int(request_json.get('timestamp', datetime.now().strftime('%S')))
+    timestamp = int(request_json.get('timestamp', calendar.timegm(time.gmtime())))
     limit = int(request_json.get('limit', 25))
     if limit > 100:
         limit = 25

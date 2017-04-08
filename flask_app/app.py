@@ -366,29 +366,40 @@ def search():
         check['timestamp'] = {"$lt": timestamp}
     sort = list()
     sort.append(("timestamp", pymongo.DESCENDING))
-
-    docs = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]
-    print(check)
-    print(str(len(docs)) + str(docs))
-    if len(docs) == 0:
-        return error_msg({'error': 'user not found'})
-    #tids = [str(doc['_id']) for doc in docs]
+    
+    # get tweets
+    docs_t = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]
+    if len(docs_t) == 0:
+        return error_msg({'error': 'no tweets found'})
+    #tids = [doc['_id'] for doc in docs_t]
+    
+    # get usernames for tweets
+    check = dict()
+    check['_id'] = {'$in': [doc['uid'] for doc in docs_t]}
+    docs_u = [(doc['_id'], doc['username']) for doc in user_coll.find(check)]
+    if len(docs_t) == 0:
+        return error_msg({'error': 'no users found for tweets - server issue'})
+    id_username = dict()
+    for i in docs_u:
+        id_username[i[0]] = i[1]
     def make_tweet_item(tid, uid, content, timestamp):
         # respond with tweet
         item_details = dict()
         item_details['id'] = str(tid)
         item_details['content'] = content
         item_details['timestamp'] = timestamp
-        # check for user of tweet
-        check = dict()
-        check['_id'] = uid
-        docs = [doc for doc in user_coll.find(check)]
-        if len(docs) != 1:
-            return error_msg({'error': 'database issue'})
-        mc.close()
-        item_details['username'] = docs[0]['username']
+        ## check for user of tweet
+        #check = dict()
+        #check['_id'] = uid
+        #docs = [doc for doc in user_coll.find(check)]
+        #if len(docs) != 1:
+        #    return error_msg({'error': 'database issue'})
+        #mc.close()
+        #item_details['username'] = docs[0]['username']
+        item_details['username'] = id_username[uid]
+        print("make tweet item - return")
         return item_details
-    tids = [make_tweet_item(doc['_id'], doc['uid'], doc['content'], doc['timestamp']) for doc in docs]
+    tids = [make_tweet_item(doc['_id'], doc['uid'], doc['content'], doc['timestamp']) for doc in docs_t]
 
     # return 
     mc.close()

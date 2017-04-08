@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <script type="text/javascript">
+    function register(){
+        var username = $("#username").val();
+        $.ajax({
+            type: "POST",
+            url: "/follow",
+            contentType: "application/json",
+            data: JSON.stringify({username: username, follow: follow}),
+            success: function (result) {
+                alert(result);
+            }
+        });
+    }
+    </script>
+</head>
+<body>
+   <form action="javascript:register();">
+        <p> Username: </p>
+        <input type="text" id="username">
+        <p> Follow: </p>
+        + follow<input type="radio" name="follow" value="True"><br>
+        - unfollow<input type="radio" name="follow" value="False"><br>
+        <input type="submit" value="submit">
+    </form>
+</body>
+</html>

@@ -367,7 +367,7 @@ def search():
     sort = list()
     sort.append(("timestamp", pymongo.DESCENDING))
 
-    docs = [doc for doc in tweet_coll.find(check).sort(sort)][limit:]
+    docs = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]
     print(check)
     print(str(len(docs)) + str(docs))
     if len(docs) == 0:

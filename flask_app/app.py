@@ -3,7 +3,6 @@ from tools import error_msg, success_msg, randomString #, sendemail
 from flask import Flask, request, make_response, render_template
 from datetime import datetime
 import time, calendar
-#from MySQLdb import escape_string as thwart
 import pymongo
 from pymongo import MongoClient
 import bson
@@ -51,48 +50,6 @@ def adduser():
     mc.close()
     return success_msg({})
 
-    # # connect
-    # client = MongoClient(mongo_server)  # connect to server
-    # db = client.twitterclone  # connect to db
-    # coll_user = db.user  # connect to collection
-    # request_json = request.json  # get json
-    # # check for existing user or email
-    # user_check = dict()
-    # user_check["$or"] = [{'username': request_json['username']},
-    #                      {'email': request_json['email']}]
-    # cursor = coll_user.find(user_check)
-    # docs = [doc for doc in cursor]
-    # if len(docs) > 0:
-    #     return error_msg({'error': 'username or email already used'})
-    # # insert new user
-    # user_new = dict()
-    # user_new['username'] = request_json['username']
-    # user_new['email'] = request_json['email']
-    # user_new['password'] = request_json['password']
-    # user_new['verified'] = False
-    # user_new['verify_key'] = randomString()
-    # coll_user.insert_one(user_new)
-    # # optional - user app key verification
-    # #global verify_key
-    # #verify_key[email] = user_new['verify_key']
-    # #sendemail(key, email)
-    # client.close()
-    # return success_msg({})
-
-#    c, conn = connection()
-#    x = c.execute("SELECT * FROM user WHERE username = (%s) or email = (%s);", (username, email))
-#    if x != 0:
-#        return error_msg({'error': 'username or emial already used'})
-#    c.execute("INSERT INTO user (username, password, email, disable) VALUES (%s, %s, %s, True)", (username, password, email))
-#    conn.commit()
-#    c.close()
-#    conn.close()
-#    global verify_key
-#    key = randomString()
-#    verify_key[email] = key
-#    sendemail(key, email)
-#    return success_msg({})
-
 @app.route('/login', methods = ['POST', "GET"])
 def login():
     if request.method == 'GET':
@@ -127,17 +84,6 @@ def login():
     resp.set_cookie('cookie', login['session'])
     return resp
     
-   # global cookies
-   # c, conn = connection()
-   # x = c.execute("SELECT uid FROM user WHERE username = (%s) and password = (%s) and disable =False", (username, password))
-   # if x != 1:
-   #     return error_msg({})
-   # uid = c.fetchone()[0]
-   # cookie = randomString()
-   # cookies[cookie] = uid
-   # resp = make_response(success_msg({}))
-   # resp.set_cookie('cookie', cookie)
-   # return resp
 
 @app.route('/logout', methods = ['POST', 'GET'])
 def logout():
@@ -166,13 +112,6 @@ def logout():
     mc.close()
     return success_msg({})
 
-    # global cookies
-    # cookie = request.cookies.get('cookie')
-    # if not cookie:
-    #     return "Not logged in!"
-    # # TODO - update mongo tables
-    # cookies.pop(cookie)
-    # return success_msg({})
 
 @app.route('/verify', methods = ['POST', 'GET'])
 def verify():
@@ -205,21 +144,6 @@ def verify():
     mc.close()
     return success_msg({})
 
-    # request_json = request.json   
-    # email = request_json['email']
-    # key = request_json['key']
-    # # TODO - check mongo tables
-    # global verify_key
-    # if verify_key.get(email) != key and key != 'abracadabra':
-    #     return error_msg({'error': 'wrong combination!'})
-    # verify_key.pop(email)
-    # # TODO - add mongo support
-    # c, conn = connection()
-    # c.execute("UPDATE user SET disable = False where email = (%s)", (email,))
-    # conn.commit()
-    # c.close()
-    # conn.close()
-    # return success_msg({})
 
 @app.route('/additem', methods = ['POST', 'GET'])
 def additem():
@@ -256,24 +180,6 @@ def additem():
     other_response_fields['id'] = str(result.inserted_id)
     return success_msg(other_response_fields)
 
-    # # TODO - check mongo tables
-    # global cookies
-    # request_json = request.json
-    # post_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    # content = request_json['content']
-    # cookie = request.cookies.get('cookie')
-    # try:
-    #     uid = cookies[cookie]
-    # except:
-    #     return error_msg({"error": "not logged in"})
-    # # TODO - add mongo support
-    # c, conn = connection()
-    # c.execute("INSERT INTO tweet (uid, content, time) VALUES (%s, %s, %s)", (uid, content, post_time))
-    # tid = c.lastrowid
-    # conn.commit()
-    # c.close()
-    # conn.close()
-    # return success_msg({"id": tid})
 
 @app.route('/item/<tid>', methods = ['GET', 'DELETE'])
 def item(tid):
@@ -327,28 +233,17 @@ def item(tid):
 
     return 405
 
-    # tid = int(tid)
-    # # TODO - add mongo support
-    # c, conn = connection()
-    # c.execute("SELECT t.tid, u.username, t.content, t.time from tweet t, user u where u.uid = t.uid and t.tid = (%s);", (tid,))
-    # a = c.fetchone()
-    # return success_msg({"item": {"id": a[0], "username": a[1], "content": a[2], "timestamp": int(a[3].timestamp())}})
 
 @app.route('/search', methods = ['GET','POST'])
 def search():
     if request.method == 'GET':
         return render_template('search.html')
 
+    # connect
     mc = MongoClient(mongo_server)
     request_json = request.json
     tweet_coll = mc.twitterclone.tweet
     user_coll = mc.twitterclone.user
-    # timestamp = request_json.get('timestamp')
-    # if timestamp:
-    #     timestamp = datetime.fromtimestamp(float(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
-    #     #timestamp = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-    # else:
-    #     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     # get default values
     timestamp = int(request_json.get('timestamp', calendar.timegm(time.gmtime())))
@@ -371,7 +266,6 @@ def search():
     docs_t = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]
     if len(docs_t) == 0:
         return error_msg({'error': 'no tweets found'})
-    #tids = [doc['_id'] for doc in docs_t]
     
     # get usernames for tweets
     check = dict()
@@ -388,14 +282,6 @@ def search():
         item_details['id'] = str(tid)
         item_details['content'] = content
         item_details['timestamp'] = timestamp
-        ## check for user of tweet
-        #check = dict()
-        #check['_id'] = uid
-        #docs = [doc for doc in user_coll.find(check)]
-        #if len(docs) != 1:
-        #    return error_msg({'error': 'database issue'})
-        #mc.close()
-        #item_details['username'] = docs[0]['username']
         item_details['username'] = id_username[uid]
         print("make tweet item - return")
         return item_details
@@ -406,16 +292,6 @@ def search():
     other_response_fields = dict()
     other_response_fields['items'] = tids
     return success_msg(other_response_fields)
-
-
-    # # TODO - add mongo support
-    # c, conn = connection()
-    # c.execute("SELECT t.tid, u.username, t.content, t.time from user u, tweet t where u.uid = t.uid order by t.time desc limit %s;", (limit,))
-    # data = c.fetchall()
-    # items = []
-    # for a in data:
-    #     items.append({"id": a[0], "username": a[1], "content": a[2], "timestamp": int(a[3].timestamp())})
-    # return success_msg({"items": items, "number": len(items)})
 
 
 @app.route('/user/<username>', methods = ['GET'])

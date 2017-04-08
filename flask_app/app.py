@@ -6,6 +6,11 @@ import time, calendar
 #from MySQLdb import escape_string as thwart
 import pymongo
 from pymongo import MongoClient
+import bson
+from bson.objectid import ObjectId
+from bson.json_util import dumps
+from bson.json_util import loads
+
 
 app = Flask(__name__)
 
@@ -41,7 +46,7 @@ def adduser():
     user['password'] = request_json['password']
     user['verified'] = False
     user['verify_key'] = randomString()
-    result = coll_user.insert_one(user)
+    result = user_coll.insert_one(user)
     #sendemail(key, email)
     mc.close()
     return success_msg({})
@@ -137,9 +142,10 @@ def login():
 @app.route('/logout', methods = ['POST', 'GET'])
 def logout():
     if request.method == 'GET':
-        return render_template('login.html')
+        return render_template('logout.html')
 
     session = request.cookies.get('cookie')  # get session
+    print(session)
     # connect to user and login collections
     mc = MongoClient(mongo_server)
     user_coll = mc.twitterclone.user
@@ -148,10 +154,12 @@ def logout():
     check = dict()
     check['session'] = session
     docs = [doc for doc in login_coll.find(check)]
-    if docs != 1:
+    print(str(len(docs)) + str(docs))
+    if len(docs) != 1:
         return error_msg({'error': 'not logged in'})
     # logs out user
     result = login_coll.delete_many(check)
+    print('logout - ' + str(result))
     # optional - logout app cookies
     #global cookies
     #cookies.pop(cookie)
@@ -239,9 +247,13 @@ def additem():
     tweet['content'] = request_json['content']
     tweet['timestamp'] = calendar.timegm(time.gmtime())
     result = tweet_coll.insert_one(tweet)
+    print('result')
+    print(result)
+    print(str(result))
     mc.close()
     other_response_fields = dict()
-    other_response_fields['id'] = result.inserted_id
+    #other_response_fields['id'] = dumps(result.inserted_id)
+    other_response_fields['id'] = str(result.inserted_id)
     return success_msg(other_response_fields)
 
     # # TODO - check mongo tables
@@ -265,21 +277,24 @@ def additem():
 
 @app.route('/item/<tid>', methods = ['GET', 'DELETE'])
 def item(tid):
+    print('got to item')
+    tid = '{"$oid": "' + tid + '"}'
     if request.method == 'GET':
+        print(tid)
+        print(loads(tid))
         # connect to tweet and user collection
         mc = MongoClient(mongo_server)
         tweet_coll = mc.twitterclone.tweet
         user_coll = mc.twitterclone.user
         # check for tweet with tid
         check = dict()
-        check['_id'] = tid
+        check['_id'] = loads(tid)
         docs = [doc for doc in tweet_coll.find(check)]
         if len(docs) != 1:
             return error_msg({'error': 'incorrect tweet id'})
         # respond with tweet
-        mc.close()
         item_details = dict()
-        item_details['id'] = docs[0]['_id']
+        item_details['id'] = str(docs[0]['_id'])
         item_details['content'] = docs[0]['content']
         item_details['timestamp'] = docs[0]['timestamp']
         # check for user of tweet
@@ -288,6 +303,7 @@ def item(tid):
         docs = [doc for doc in user_coll.find(check)]
         if len(docs) != 1:
             return error_msg({'error': 'database issue'})
+        mc.close()
         item_details['username'] = docs[0]['username']
         other_response_fields = dict()
         other_response_fields['item'] = item_details
@@ -299,7 +315,7 @@ def item(tid):
         tweet_coll = mc.twitterclone.tweet
         # check for tweet with tid
         check = dict()
-        check['_id'] = tid
+        check['_id'] = loads(tid)
         docs = [doc for doc in tweet_coll.find(check)]
         if len(docs) != 1:
             return error_msg({'error': 'incorrect tweet id'})
@@ -323,8 +339,10 @@ def search():
     if request.method == 'GET':
         return render_template('search.html')
 
+    mc = MongoClient(mongo_server)
     request_json = request.json
     tweet_coll = mc.twitterclone.tweet
+    user_coll = mc.twitterclone.user
     # timestamp = request_json.get('timestamp')
     # if timestamp:
     #     timestamp = datetime.fromtimestamp(float(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
@@ -337,6 +355,7 @@ def search():
     limit = int(request_json.get('limit', 25))
     if limit > 100:
         limit = 25
+    print("limit - ", limit)
     q = request_json.get('q', None)
     username = request_json.get('username', None)
     following = request_json.get('following', None)
@@ -344,20 +363,39 @@ def search():
     # form query M1
     check = dict()
     if timestamp is not None:
-        check['timestamp'] = {"$gt": timestamp}
+        check['timestamp'] = {"$lt": timestamp}
     sort = list()
-    sort.append(("timestamp", pymongo.ASCENDING))
+    sort.append(("timestamp", pymongo.DESCENDING))
 
-    docs = [doc for doc in tweet_coll.find(check).sort(sort)]
+    docs = [doc for doc in tweet_coll.find(check).sort(sort)][limit:]
+    print(check)
+    print(str(len(docs)) + str(docs))
     if len(docs) == 0:
         return error_msg({'error': 'user not found'})
-    tids = [doc['_id'] for doc in docs]
+    #tids = [str(doc['_id']) for doc in docs]
+    def make_tweet_item(tid, uid, content, timestamp):
+        # respond with tweet
+        item_details = dict()
+        item_details['id'] = str(tid)
+        item_details['content'] = content
+        item_details['timestamp'] = timestamp
+        # check for user of tweet
+        check = dict()
+        check['_id'] = uid
+        docs = [doc for doc in user_coll.find(check)]
+        if len(docs) != 1:
+            return error_msg({'error': 'database issue'})
+        mc.close()
+        item_details['username'] = docs[0]['username']
+        return item_details
+    tids = [make_tweet_item(doc['_id'], doc['uid'], doc['content'], doc['timestamp']) for doc in docs]
 
     # return 
     mc.close()
     other_response_fields = dict()
-    other_response_fields['items'] = tids[limit:]
+    other_response_fields['items'] = tids
     return success_msg(other_response_fields)
+
 
     # # TODO - add mongo support
     # c, conn = connection()

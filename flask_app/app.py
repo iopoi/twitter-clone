@@ -270,10 +270,12 @@ def search():
 
     # connect
     mc = MongoClient(mongo_server)
+    session = request.cookies.get('cookie')  # get session
     request_json = request.json
     print('debug - search - json:', request_json)  # debug
     tweet_coll = mc.twitterclone.tweet
     user_coll = mc.twitterclone.user
+    login_coll = mc.twitterclone.login
 
     # get default values
     timestamp = int(request_json.get('timestamp', calendar.timegm(time.gmtime())))
@@ -283,7 +285,7 @@ def search():
     print("limit - ", limit)
     q = request_json.get('q', None)
     username = request_json.get('username', None)
-    following = request_json.get('following', None)
+    following = bool(request_json.get('following', True))
 
     # form query M1
     check = dict()
@@ -292,6 +294,36 @@ def search():
     sort = list()
     sort.append(("timestamp", pymongo.DESCENDING))
     
+    # form query M2
+    if following != False:
+        # get list of follower ids
+        check_session = dict()
+        check_session['session'] = session
+        docs = [doc for doc in login_coll.find(check_session)]
+        if len(docs) != 1:
+            print('debug - search - error - check:', str(check_session), 'docs:', str(docs))  # debug
+            return error_msg({'error': 'not logged in'})
+        s_uid = docs[0]['uid']
+        check_following = dict()
+        check_following['uid'] = s_uid
+        docs = [doc for doc in following_coll.find(check_following)]
+        if len(docs) != 1:
+            print('debug - search - error - check:', str(check_following), 'docs:', str(docs))  # debug
+            return error_msg({'error': 'user not found'})
+        following = docs[0]['following']
+        check['uid'] = {"$in": following}
+   # if username is not None:
+   #     # get username id
+   #     # check for existing verified user
+   #     check_user = dict()
+   #     check_user['username'] = username
+   #     docs = [doc for doc in user_coll.find(check_user)]
+   #     if len(docs) != 1:
+   #         print('debug - search - error - check:', str(check), 'docs:', str(docs))
+   #         return error_msg({'error': 'incorrect password or user not verified or user does not exist'})
+   #     check['uid'] = docs[0]['_id']
+        
+
     # get tweets
     docs_t = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]
     if len(docs_t) == 0:

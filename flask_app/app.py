@@ -141,6 +141,20 @@ def verify():
     user['verified'] = True
     print(user)
     result = user_coll.replace_one({'_id': Oid}, user)
+    following_coll = mc.twitterclone.following
+    followers_coll = mc.twitterclone.followers
+    # insert new user
+    following = dict()
+    following['uid'] = Oid
+    following['following'] = list()
+    result = following_coll.insert_one(following)
+    print('added following row', str(result))
+    followers = dict()
+    followers['uid'] = Oid
+    followers['followers'] = list()
+    result = followers_coll.insert_one(followers)
+    print('added followers row', str(result))
+    
     mc.close()
     return success_msg({})
 
@@ -388,8 +402,10 @@ def following():
     other_response_fields['users'] = following[limit:]
     return success_msg(other_response_fields)
 
-@app.route('/follow', methods = ['POST'])
+@app.route('/follow', methods = ['GET', 'POST'])
 def follow():
+    if request.method == 'GET':
+        return render_template('follow.html')
     request_json = request.json  # get json
     session = request.cookies.get('cookie')  # get session
     # connect to login, user, following, and followers collections
@@ -415,12 +431,13 @@ def follow():
     docs = [doc for doc in user_coll.find(check)]
     if len(docs) != 1:
         return error_msg({'error': "follower doesn't exist"})
-    fid = docs[0]['uid']
+    fid = docs[0]['_id']
 
     # add or remove follower
-    if request_json['follow'] == False:
+    if request_json['follow'] == 'False':
         # remove follower
-
+        print(request_json['follow'])
+        print('unfollow')
         # you have a list of people you are following
         # to remove someone you follow
         #   you must remove yourself from their followers list
@@ -429,40 +446,66 @@ def follow():
         docs = [doc for doc in followers_coll.find(check)]
         if len(docs) != 1:
             return error_msg({'error': "follower doesn't exist"})
-        followers = docs[0]['followers'].remove(uid)  # TODO must check if followers is a list()
-        check['$set'] = {'followers': followers}
-        result = followers_coll.update_one(check)
+        followers = docs[0]['followers']  # TODO must check if followers is a list()
+        if followers is None:
+            followers = list()
+        try:
+            followers.remove(uid)
+        except ValueError: 
+            return error_msg({'error': "cannot unfollow someone you are not following"})
+        result = followers_coll.update_one({'_id': docs[0]['_id']}, {'$set': {"followers": followers}})
         #   you also must remove them from your following list 
         check['uid'] = uid
         docs = [doc for doc in following_coll.find(check)]
         if len(docs) != 1:
             return error_msg({'error': "following doesn't exist"})
-        following = docs[0]['following'].remove(fid)  # TODO must check if following is a list()
-        check['$set'] = {'following': following}
-        result = following_coll.update_one(check)
+        following = docs[0]['following']  # TODO must check if followers is a list()
+        print('following - ', following)
+        if following is None:
+            following = list()
+        try:
+            following.remove(fid)
+        except ValueError: 
+            return error_msg({'error': "cannot unfollow someone you are not following"})
+        #result = following_coll.update_one(check)
+        result = following_coll.update_one({'_id': docs[0]['_id']}, {'$set': {"following": following}})
 
     else:
         # add follower
-
+        print(request_json['follow'])
+        print('follow')
         # you have a list of people you are following
         # to add a follower
         #   you must add yourself to their followers list
         check = dict()
         check['uid'] = fid
         docs = [doc for doc in followers_coll.find(check)]
+        print('followers doc - ', str(docs))
         if len(docs) != 1:
             return error_msg({'error': "follower doesn't exist"})
-        followers = docs[0]['followers'].append(uid)  # TODO must check if followers is a list()
-        check['$set'] = {'followers': followers}
-        result = followers_coll.update_one(check)
+        #followers = docs[0]['followers'].append(uid)  # TODO must check if followers is a list()
+        followers = docs[0]['followers']  # TODO must check if followers is a list()
+        print('followers - ', followers)
+        if followers is None:
+            followers = list()
+        followers.append(uid)
+        print('followers - ', followers)
+        #result = followers_coll.update_one(check)
+        result = followers_coll.update_one({'_id': docs[0]['_id']}, {'$set': {"followers": followers}})
         #   you also must add them to your following list
         check['uid'] = uid
         docs = [doc for doc in following_coll.find(check)]
+        print('following doc - ', str(docs))
         if len(docs) != 1:
             return error_msg({'error': "following doesn't exist"})
-        following = docs[0]['following'].append(fid)  # TODO must check if following is a list()
-        check['$set'] = {'following': following}
-        result = following_coll.update_one(check)
+        following = docs[0]['following']  # TODO must check if followers is a list()
+        print('following - ', following)
+        if following is None:
+            following = list()
+        following.append(fid)
+        print('following - ', following)
+        #result = following_coll.update_one(check)
+        result = following_coll.update_one({'_id': docs[0]['_id']}, {'$set': {"following": following}})
 
     mc.close()
     other_response_fields = dict()

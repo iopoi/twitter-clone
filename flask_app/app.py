@@ -285,7 +285,7 @@ def search():
     check = dict()
     check['_id'] = {'$in': [doc['uid'] for doc in docs_t]}
     docs_u = [(doc['_id'], doc['username']) for doc in user_coll.find(check)]
-    if len(docs_t) == 0:
+    if len(docs_u) == 0:
         return error_msg({'error': 'no users found for tweets - server issue'})
     id_username = dict()
     for i in docs_u:
@@ -309,7 +309,7 @@ def search():
 
 
 @app.route('/user/<username>', methods = ['GET'])
-def user():
+def user(username):
     mc = MongoClient(mongo_server)
     user_coll = mc.twitterclone.user
     following_coll = mc.twitterclone.following
@@ -320,7 +320,7 @@ def user():
     docs = [doc for doc in user_coll.find(check)]
     if len(docs) != 1:
         return error_msg({'error': 'user not found'})
-    uid = docs[0]['uid']
+    uid = docs[0]['_id']
     email = docs[0]['email']
     # get followers
     check = dict()
@@ -342,21 +342,32 @@ def user():
     user_parts['following'] = following_num
     other_response_fields = dict()
     other_response_fields['user'] = user_parts
+    print('before return')
     return success_msg(other_response_fields)
 
 @app.route('/user/<username>/followers', methods = ['GET'])
-def followers():
+def followers(username):
+    print('called followers', username)
     request_json = request.json  # get json
     mc = MongoClient(mongo_server)
     user_coll = mc.twitterclone.user
     followers_coll = mc.twitterclone.followers
+    if request_json is None:
+        limit = 50
+    elif request_json['limit'] > 200:
+        limit = 200
+    elif request_json['limit'] < 1:
+        limit = 50
+    else:
+        limit = request_json['limit']
     # get uid from username
     check = dict()
     check['username'] = username
     docs = [doc for doc in user_coll.find(check)]
     if len(docs) != 1:
         return error_msg({'error': 'user not found'})
-    uid = docs[0]['uid']
+    uid = docs[0]['_id']
+    print('uid:', str(uid))
     # get followers
     check = dict()
     check['uid'] = uid
@@ -364,42 +375,66 @@ def followers():
     if len(docs) != 1:
         return error_msg({'error': 'user not found'})
     followers = docs[0]['followers']
-    # return email followers and following
-    limit = int(request_json.get('limit', 50))
-    if limit > 200:
-        limit = 200
+    followers = followers[:limit]
+
+    # get usernames for followers
+    check = dict()
+    check['_id'] = {'$in': followers}
+    usernames = [doc['username'] for doc in user_coll.find(check)]
+    if len(usernames) == 0:
+        return error_msg({'error': 'no users found for tweets - server issue'})
+
+    print('followers:', str(usernames))
+    # return the names of the followers
     mc.close()
     other_response_fields = dict()
-    other_response_fields['users'] = followers[limit:]
+    other_response_fields['users'] = usernames
     return success_msg(other_response_fields)
 
 @app.route('/user/<username>/following', methods = ['GET'])
-def following():
+def following(username):
+    print('called following', username)
     request_json = request.json  # get json
     mc = MongoClient(mongo_server)
     user_coll = mc.twitterclone.user
     following_coll = mc.twitterclone.followers
+    if request_json is None:
+        limit = 50
+    elif request_json['limit'] > 200:
+        limit = 200
+    elif request_json['limit'] < 1:
+        limit = 50
+    else:
+        limit = request_json['limit']
     # get uid from username
     check = dict()
     check['username'] = username
     docs = [doc for doc in user_coll.find(check)]
     if len(docs) != 1:
         return error_msg({'error': 'user not found'})
-    uid = docs[0]['uid']
-    # get followers
+    uid = docs[0]['_id']
+    
+    # get following
     check = dict()
     check['uid'] = uid
     docs = [doc for doc in following_coll.find(check)]
+    print(docs)
     if len(docs) != 1:
         return error_msg({'error': 'user not found'})
-    following = docs[0]['followers']
-    # return email followers and following
-    limit = int(request_json.get('limit', 50))
-    if limit > 200:
-        limit = 200
+    following = docs[0]['following']
+    following = following[:limit]
+
+    # get usernames for following
+    check = dict()
+    check['_id'] = {'$in': following}
+    usernames = [doc['username'] for doc in user_coll.find(check)]
+    if len(usernames) == 0:
+        return error_msg({'error': 'no users found for tweets - server issue'})
+
+    # return the names of the following
     mc.close()
     other_response_fields = dict()
-    other_response_fields['users'] = following[limit:]
+    other_response_fields['users'] = usernames
     return success_msg(other_response_fields)
 
 @app.route('/follow', methods = ['GET', 'POST'])

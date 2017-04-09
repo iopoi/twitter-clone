@@ -28,6 +28,7 @@ def adduser():
         return render_template('register.html')
 
     request_json = request.json  # get json
+    print('debug - adduser - json:', str(request_json))  # debug
     # connect to user collection
     mc = MongoClient(mongo_server)
     user_coll = mc.twitterclone.user
@@ -37,6 +38,7 @@ def adduser():
                          {'email': request_json['email']}]
     docs = [doc for doc in user_coll.find(check)]
     if len(docs) > 0:
+        print('debug - adduser - error - check:', str(check), 'docs:', str(docs))
         return error_msg({'error': 'username or email already used'})
     # insert new user
     user = dict()
@@ -48,6 +50,7 @@ def adduser():
     result = user_coll.insert_one(user)
     #sendemail(key, email)
     mc.close()
+    print('debug - adduser - success')
     return success_msg({})
 
 @app.route('/login', methods = ['POST', "GET"])
@@ -56,6 +59,7 @@ def login():
         return render_template('login.html')
 
     request_json = request.json  # get json
+    print('debug - login - json:', str(request_json))  # debug
     # connect to user and login collections
     mc = MongoClient(mongo_server)
     user_coll = mc.twitterclone.user
@@ -66,9 +70,8 @@ def login():
     check['password'] = request_json['password']
     check['verified'] = True
     docs = [doc for doc in user_coll.find(check)]
-    print('login - docs')  # debug
-    print(docs)  #debug
     if len(docs) != 1:
+        print('debug - login - error - check:', str(check), 'docs:', str(docs))
         return error_msg({'error': 'incorrect password or user not verified or user does not exist'})
     # login user
     login = dict()
@@ -91,7 +94,7 @@ def logout():
         return render_template('logout.html')
 
     session = request.cookies.get('cookie')  # get session
-    print(session)
+    print('debug - logout - session:', str(session))  # debug
     # connect to user and login collections
     mc = MongoClient(mongo_server)
     user_coll = mc.twitterclone.user
@@ -102,14 +105,15 @@ def logout():
     docs = [doc for doc in login_coll.find(check)]
     print(str(len(docs)) + str(docs))
     if len(docs) != 1:
+        print('debug - logout - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'not logged in'})
     # logs out user
     result = login_coll.delete_many(check)
-    print('logout - ' + str(result))
     # optional - logout app cookies
     #global cookies
     #cookies.pop(cookie)
     mc.close()
+    print('debug - logout - success', str(result))
     return success_msg({})
 
 
@@ -119,6 +123,7 @@ def verify():
         return render_template('verify.html')
 
     request_json = request.json  # get json
+    print('debug - verify - json:', str(request_json))  # debug
     # connect to user collection
     mc = MongoClient(mongo_server)
     user_coll = mc.twitterclone.user
@@ -130,6 +135,7 @@ def verify():
         check['verify_key'] = request_json.get('key', 'abracadabra')
     docs = [doc for doc in user_coll.find(check)]
     if len(docs) != 1:
+        print('debug - verify - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'wrong key or email not found or user already verified'})
     # verifiy user
     Oid = docs[0]['_id']
@@ -139,7 +145,7 @@ def verify():
     user['email'] = docs[0]['email']
     user['password'] = docs[0]['password']
     user['verified'] = True
-    print(user)
+    #print(user)
     result = user_coll.replace_one({'_id': Oid}, user)
     following_coll = mc.twitterclone.following
     followers_coll = mc.twitterclone.followers
@@ -148,14 +154,15 @@ def verify():
     following['uid'] = Oid
     following['following'] = list()
     result = following_coll.insert_one(following)
-    print('added following row', str(result))
+    #print('added following row', str(result))
     followers = dict()
     followers['uid'] = Oid
     followers['followers'] = list()
     result = followers_coll.insert_one(followers)
-    print('added followers row', str(result))
+    #print('added followers row', str(result))
     
     mc.close()
+    print('debug - verify - success')
     return success_msg({})
 
 
@@ -165,6 +172,7 @@ def additem():
         return render_template('addtweet.html')
 
     request_json = request.json  # get json
+    print('debug - additme - json:', request_json)  # debug
     session = request.cookies.get('cookie')  # get session
     # connect to login and tweet collections
     mc = MongoClient(mongo_server)
@@ -178,6 +186,7 @@ def additem():
     check['session'] = session
     docs = [doc for doc in login_coll.find(check)]
     if len(docs) != 1:
+        print('debug - additem - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'not logged in'})
     # insert tweet
     tweet = dict()
@@ -185,13 +194,14 @@ def additem():
     tweet['content'] = request_json['content']
     tweet['timestamp'] = calendar.timegm(time.gmtime())
     result = tweet_coll.insert_one(tweet)
-    print('result')
-    print(result)
-    print(str(result))
+    #print('result')
+    #print(result)
+    #print(str(result))
     mc.close()
     other_response_fields = dict()
     #other_response_fields['id'] = dumps(result.inserted_id)
     other_response_fields['id'] = str(result.inserted_id)
+    print('debug - verify - success - output:', str(other_response_fields))
     return success_msg(other_response_fields)
 
 
@@ -211,6 +221,7 @@ def item(tid):
         check['_id'] = loads(tid)
         docs = [doc for doc in tweet_coll.find(check)]
         if len(docs) != 1:
+            print('debug - item/get - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': 'incorrect tweet id'})
         # respond with tweet
         item_details = dict()
@@ -222,11 +233,13 @@ def item(tid):
         check['_id'] = docs[0]['uid']
         docs = [doc for doc in user_coll.find(check)]
         if len(docs) != 1:
+            print('debug - item/get - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': 'database issue'})
         mc.close()
         item_details['username'] = docs[0]['username']
         other_response_fields = dict()
         other_response_fields['item'] = item_details
+        print('debug - item/get - success - output:', str(other_response_fields))
         return success_msg(other_response_fields)
 
     elif request.method == 'DELETE':
@@ -238,11 +251,13 @@ def item(tid):
         check['_id'] = loads(tid)
         docs = [doc for doc in tweet_coll.find(check)]
         if len(docs) != 1:
+            print('debug - item/delete - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': 'incorrect tweet id'})
         # delete tweet
         result = tweet_coll.delete_many(check)
         mc.close()
         other_response_fields = dict()
+        print('debug - item/delete - success - output:', str(other_response_fields))
         return success_msg(other_response_fields)
 
     return 405
@@ -256,6 +271,7 @@ def search():
     # connect
     mc = MongoClient(mongo_server)
     request_json = request.json
+    print('debug - search - json:', request_json)  # debug
     tweet_coll = mc.twitterclone.tweet
     user_coll = mc.twitterclone.user
 
@@ -279,6 +295,7 @@ def search():
     # get tweets
     docs_t = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]
     if len(docs_t) == 0:
+        print('debug - search - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'no tweets found'})
     
     # get usernames for tweets
@@ -286,6 +303,7 @@ def search():
     check['_id'] = {'$in': [doc['uid'] for doc in docs_t]}
     docs_u = [(doc['_id'], doc['username']) for doc in user_coll.find(check)]
     if len(docs_u) == 0:
+        print('debug - search - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'no users found for tweets - server issue'})
     id_username = dict()
     for i in docs_u:
@@ -305,11 +323,13 @@ def search():
     mc.close()
     other_response_fields = dict()
     other_response_fields['items'] = tids
+    print('debug - search - success - output:', str(other_response_fields))
     return success_msg(other_response_fields)
 
 
 @app.route('/user/<username>', methods = ['GET'])
 def user(username):
+    print('debug - user - GET - username:', str(username))  # debug
     mc = MongoClient(mongo_server)
     user_coll = mc.twitterclone.user
     following_coll = mc.twitterclone.following
@@ -327,11 +347,13 @@ def user(username):
     check['uid'] = uid
     docs = [doc for doc in followers_coll.find(check)]
     if len(docs) != 1:
+        print('debug - user - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'user not found'})
     followers_num = len(docs[0]['followers'])
     # get following
     docs = [doc for doc in following_coll.find(check)]
     if len(docs) != 1:
+        print('debug - user - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'user not found'})
     following_num = len(docs[0]['following'])
     # return email followers and following
@@ -342,12 +364,12 @@ def user(username):
     user_parts['following'] = following_num
     other_response_fields = dict()
     other_response_fields['user'] = user_parts
-    print('before return')
+    print('debug - user - success - output:', str(other_response_fields))
     return success_msg(other_response_fields)
 
 @app.route('/user/<username>/followers', methods = ['GET'])
 def followers(username):
-    print('called followers', username)
+    print('debug - followers - GET - username:', str(username))  # debug
     request_json = request.json  # get json
     mc = MongoClient(mongo_server)
     user_coll = mc.twitterclone.user
@@ -365,14 +387,16 @@ def followers(username):
     check['username'] = username
     docs = [doc for doc in user_coll.find(check)]
     if len(docs) != 1:
+        print('debug - followers - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'user not found'})
     uid = docs[0]['_id']
-    print('uid:', str(uid))
+    #print('uid:', str(uid))
     # get followers
     check = dict()
     check['uid'] = uid
     docs = [doc for doc in followers_coll.find(check)]
     if len(docs) != 1:
+        print('debug - followers - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'user not found'})
     followers = docs[0]['followers']
     followers = followers[:limit]
@@ -382,18 +406,20 @@ def followers(username):
     check['_id'] = {'$in': followers}
     usernames = [doc['username'] for doc in user_coll.find(check)]
     if len(usernames) == 0:
+        print('debug - followers - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'no users found for tweets - server issue'})
 
-    print('followers:', str(usernames))
+    #print('followers:', str(usernames))
     # return the names of the followers
     mc.close()
     other_response_fields = dict()
     other_response_fields['users'] = usernames
+    print('debug - followers - success - output:', str(other_response_fields))
     return success_msg(other_response_fields)
 
 @app.route('/user/<username>/following', methods = ['GET'])
 def following(username):
-    print('called following', username)
+    print('debug - followers - GET - username:', str(username))  # debug
     request_json = request.json  # get json
     mc = MongoClient(mongo_server)
     user_coll = mc.twitterclone.user
@@ -411,6 +437,7 @@ def following(username):
     check['username'] = username
     docs = [doc for doc in user_coll.find(check)]
     if len(docs) != 1:
+        print('debug - following - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'user not found'})
     uid = docs[0]['_id']
     
@@ -418,8 +445,8 @@ def following(username):
     check = dict()
     check['uid'] = uid
     docs = [doc for doc in following_coll.find(check)]
-    print(docs)
     if len(docs) != 1:
+        print('debug - following - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'user not found'})
     following = docs[0]['following']
     following = following[:limit]
@@ -429,12 +456,14 @@ def following(username):
     check['_id'] = {'$in': following}
     usernames = [doc['username'] for doc in user_coll.find(check)]
     if len(usernames) == 0:
+        print('debug - following - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'no users found for tweets - server issue'})
 
     # return the names of the following
     mc.close()
     other_response_fields = dict()
     other_response_fields['users'] = usernames
+    print('debug - following - success - output:', str(other_response_fields))
     return success_msg(other_response_fields)
 
 @app.route('/follow', methods = ['GET', 'POST'])
@@ -442,6 +471,7 @@ def follow():
     if request.method == 'GET':
         return render_template('follow.html')
     request_json = request.json  # get json
+    print('debug - follow - json:', request_json)  # debug
     session = request.cookies.get('cookie')  # get session
     # connect to login, user, following, and followers collections
     mc = MongoClient(mongo_server)
@@ -457,6 +487,7 @@ def follow():
     check['session'] = session
     docs = [doc for doc in login_coll.find(check)]
     if len(docs) != 1:
+        print('debug - follow - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'not logged in'})
     # get session uid
     uid = docs[0]['uid']
@@ -465,14 +496,15 @@ def follow():
     check['username'] = request_json['username']
     docs = [doc for doc in user_coll.find(check)]
     if len(docs) != 1:
+        print('debug - follow - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': "follower doesn't exist"})
     fid = docs[0]['_id']
 
     # add or remove follower
     if request_json['follow'] == 'False':
         # remove follower
-        print(request_json['follow'])
-        print('unfollow')
+        #print(request_json['follow'])
+        #print('unfollow')
         # you have a list of people you are following
         # to remove someone you follow
         #   you must remove yourself from their followers list
@@ -480,6 +512,7 @@ def follow():
         check['uid'] = fid
         docs = [doc for doc in followers_coll.find(check)]
         if len(docs) != 1:
+            print('debug - follow - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': "follower doesn't exist"})
         followers = docs[0]['followers']  # TODO must check if followers is a list()
         if followers is None:
@@ -493,9 +526,10 @@ def follow():
         check['uid'] = uid
         docs = [doc for doc in following_coll.find(check)]
         if len(docs) != 1:
+            print('debug - follow - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': "following doesn't exist"})
         following = docs[0]['following']  # TODO must check if followers is a list()
-        print('following - ', following)
+        #print('following - ', following)
         if following is None:
             following = list()
         try:
@@ -507,8 +541,8 @@ def follow():
 
     else:
         # add follower
-        print(request_json['follow'])
-        print('follow')
+        #print(request_json['follow'])
+        #print('follow')
         # you have a list of people you are following
         # to add a follower
         #   you must add yourself to their followers list
@@ -517,33 +551,36 @@ def follow():
         docs = [doc for doc in followers_coll.find(check)]
         print('followers doc - ', str(docs))
         if len(docs) != 1:
+            print('debug - follow - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': "follower doesn't exist"})
         #followers = docs[0]['followers'].append(uid)  # TODO must check if followers is a list()
         followers = docs[0]['followers']  # TODO must check if followers is a list()
-        print('followers - ', followers)
+        #print('followers - ', followers)
         if followers is None:
             followers = list()
         followers.append(uid)
-        print('followers - ', followers)
+        #print('followers - ', followers)
         #result = followers_coll.update_one(check)
         result = followers_coll.update_one({'_id': docs[0]['_id']}, {'$set': {"followers": followers}})
         #   you also must add them to your following list
         check['uid'] = uid
         docs = [doc for doc in following_coll.find(check)]
-        print('following doc - ', str(docs))
+        #print('following doc - ', str(docs))
         if len(docs) != 1:
+            print('debug - follow - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': "following doesn't exist"})
         following = docs[0]['following']  # TODO must check if followers is a list()
-        print('following - ', following)
+        #print('following - ', following)
         if following is None:
             following = list()
         following.append(fid)
-        print('following - ', following)
+        #print('following - ', following)
         #result = following_coll.update_one(check)
         result = following_coll.update_one({'_id': docs[0]['_id']}, {'$set': {"following": following}})
 
     mc.close()
     other_response_fields = dict()
+    print('debug - follow - success - output:', str(other_response_fields))
     return success_msg(other_response_fields)
 
 

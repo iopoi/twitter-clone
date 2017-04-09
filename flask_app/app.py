@@ -397,7 +397,7 @@ def following(username):
     request_json = request.json  # get json
     mc = MongoClient(mongo_server)
     user_coll = mc.twitterclone.user
-    following_coll = mc.twitterclone.followers
+    following_coll = mc.twitterclone.following
     if request_json is None:
         limit = 50
     elif request_json['limit'] > 200:

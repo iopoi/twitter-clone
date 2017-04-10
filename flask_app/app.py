@@ -430,7 +430,7 @@ def followers(username):
     check['username'] = username
     docs = [doc for doc in user_coll.find(check)]
     if len(docs) != 1:
-        print('debug - followers - error - check:', str(check), 'docs:', str(docs))  # debug
+        print('debug - followers - error - uid - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'user not found'})
     uid = docs[0]['_id']
     #print('uid:', str(uid))
@@ -439,7 +439,7 @@ def followers(username):
     check['uid'] = uid
     docs = [doc for doc in followers_coll.find(check)]
     if len(docs) != 1:
-        print('debug - followers - error - check:', str(check), 'docs:', str(docs))  # debug
+        print('debug - followers - error - fid - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'user not found'})
     followers = docs[0]['followers']
     followers = followers[:limit]
@@ -448,8 +448,9 @@ def followers(username):
     check = dict()
     check['_id'] = {'$in': followers}
     usernames = [doc['username'] for doc in user_coll.find(check)]
-    if len(usernames) == 0:
+    if len(usernames) < 0:
         print('debug - followers - error - check:', str(check), 'docs:', str(docs))  # debug
+        print('usernames:', str(usernames))  # debug
         return error_msg({'error': 'no users found for tweets - server issue'})
 
     #print('followers:', str(usernames))
@@ -499,7 +500,7 @@ def following(username):
     check = dict()
     check['_id'] = {'$in': following}
     usernames = [doc['username'] for doc in user_coll.find(check)]
-    if len(usernames) == 0:
+    if len(usernames) < 0:
         print('debug - following - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'no users found for tweets - server issue'})
 

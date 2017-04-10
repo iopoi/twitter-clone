@@ -17,6 +17,8 @@ app = Flask(__name__)
 #cookies = dict()
 
 mongo_server = 'mongodb://192.168.1.35:27017/'
+mc = MongoClient(mongo_server)
+
 
 @app.route('/', methods = ['GET'])
 def index():
@@ -30,7 +32,8 @@ def adduser():
     request_json = request.json  # get json
     print('debug - adduser - json:', str(request_json))  # debug
     # connect to user collection
-    mc = MongoClient(mongo_server)
+    # mc = MongoClient(mongo_server)
+    global mc
     user_coll = mc.twitterclone.user
     # check for existing verified user
     check = dict()
@@ -49,7 +52,7 @@ def adduser():
     user['verify_key'] = randomString()
     result = user_coll.insert_one(user)
     #sendemail(key, email)
-    mc.close()
+    # mc.close()
     print('debug - adduser - success')
     return success_msg({})
 
@@ -61,7 +64,8 @@ def login():
     request_json = request.json  # get json
     print('debug - login - json:', str(request_json))  # debug
     # connect to user and login collections
-    mc = MongoClient(mongo_server)
+    # mc = MongoClient(mongo_server)
+    global mc
     user_coll = mc.twitterclone.user
     login_coll = mc.twitterclone.login
     # check for existing verified user
@@ -82,7 +86,7 @@ def login():
     # optional - login app cookies
     #global cookies
     #cookies[login['session']] = login['uid']
-    mc.close()
+    # mc.close()
     resp = make_response(success_msg({}))
     resp.set_cookie('cookie', login['session'])
     return resp
@@ -96,7 +100,8 @@ def logout():
     session = request.cookies.get('cookie')  # get session
     print('debug - logout - session:', str(session))  # debug
     # connect to user and login collections
-    mc = MongoClient(mongo_server)
+    # mc = MongoClient(mongo_server)
+    global mc
     user_coll = mc.twitterclone.user
     login_coll = mc.twitterclone.login
     # check for logged in user
@@ -112,7 +117,7 @@ def logout():
     # optional - logout app cookies
     #global cookies
     #cookies.pop(cookie)
-    mc.close()
+    # mc.close()
     print('debug - logout - success', str(result))
     return success_msg({})
 
@@ -125,7 +130,8 @@ def verify():
     request_json = request.json  # get json
     print('debug - verify - json:', str(request_json))  # debug
     # connect to user collection
-    mc = MongoClient(mongo_server)
+    # mc = MongoClient(mongo_server)
+    global mc
     user_coll = mc.twitterclone.user
     # check for unverified email and matching key
     check = dict()
@@ -161,7 +167,7 @@ def verify():
     result = followers_coll.insert_one(followers)
     #print('added followers row', str(result))
     
-    mc.close()
+    # mc.close()
     print('debug - verify - success')
     return success_msg({})
 
@@ -175,7 +181,8 @@ def additem():
     print('debug - additme - json:', request_json)  # debug
     session = request.cookies.get('cookie')  # get session
     # connect to login and tweet collections
-    mc = MongoClient(mongo_server)
+    # mc = MongoClient(mongo_server)
+    global mc
     login_coll = mc.twitterclone.login
     tweet_coll = mc.twitterclone.tweet
     # check for session
@@ -197,7 +204,7 @@ def additem():
     #print('result')
     #print(result)
     #print(str(result))
-    mc.close()
+    # mc.close()
     other_response_fields = dict()
     #other_response_fields['id'] = dumps(result.inserted_id)
     other_response_fields['id'] = str(result.inserted_id)
@@ -209,11 +216,13 @@ def additem():
 def item(tid):
     print('got to item')
     tid = '{"$oid": "' + tid + '"}'
+    # mc = MongoClient(mongo_server)
+    global mc
     if request.method == 'GET':
         print(tid)
         print(loads(tid))
         # connect to tweet and user collection
-        mc = MongoClient(mongo_server)
+
         tweet_coll = mc.twitterclone.tweet
         user_coll = mc.twitterclone.user
         # check for tweet with tid
@@ -235,7 +244,7 @@ def item(tid):
         if len(docs) != 1:
             print('debug - item/get - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': 'database issue'})
-        mc.close()
+        # mc.close()
         item_details['username'] = docs[0]['username']
         other_response_fields = dict()
         other_response_fields['item'] = item_details
@@ -244,7 +253,6 @@ def item(tid):
 
     elif request.method == 'DELETE':
         # connect to tweet collection
-        mc = MongoClient(mongo_server)
         tweet_coll = mc.twitterclone.tweet
         # check for tweet with tid
         check = dict()
@@ -255,7 +263,7 @@ def item(tid):
             return error_msg({'error': 'incorrect tweet id'})
         # delete tweet
         result = tweet_coll.delete_many(check)
-        mc.close()
+        # mc.close()
         other_response_fields = dict()
         print('debug - item/delete - success - output:', str(other_response_fields))
         return success_msg(other_response_fields)
@@ -269,7 +277,8 @@ def search():
         return render_template('search.html')
 
     # connect
-    mc = MongoClient(mongo_server)
+    # mc = MongoClient(mongo_server)
+    global mc
     session = request.cookies.get('cookie')  # get session
     request_json = request.json
     print('debug - search - json:', request_json)  # debug
@@ -352,7 +361,7 @@ def search():
     tids = [make_tweet_item(doc['_id'], doc['uid'], doc['content'], doc['timestamp']) for doc in docs_t]
 
     # return 
-    mc.close()
+    # mc.close()
     other_response_fields = dict()
     other_response_fields['items'] = tids
     print('debug - search - success - output:', str(other_response_fields))
@@ -362,7 +371,8 @@ def search():
 @app.route('/user/<username>', methods = ['GET'])
 def user(username):
     print('debug - user - GET - username:', str(username))  # debug
-    mc = MongoClient(mongo_server)
+    # mc = MongoClient(mongo_server)
+    global mc
     user_coll = mc.twitterclone.user
     following_coll = mc.twitterclone.following
     followers_coll = mc.twitterclone.followers
@@ -389,7 +399,7 @@ def user(username):
         return error_msg({'error': 'user not found'})
     following_num = len(docs[0]['following'])
     # return email followers and following
-    mc.close()
+    # mc.close()
     user_parts = dict()
     user_parts['email'] = email
     user_parts['followers'] = followers_num
@@ -403,7 +413,8 @@ def user(username):
 def followers(username):
     print('debug - followers - GET - username:', str(username))  # debug
     request_json = request.json  # get json
-    mc = MongoClient(mongo_server)
+    # mc = MongoClient(mongo_server)
+    global mc
     user_coll = mc.twitterclone.user
     followers_coll = mc.twitterclone.followers
     if request_json is None:
@@ -443,7 +454,7 @@ def followers(username):
 
     #print('followers:', str(usernames))
     # return the names of the followers
-    mc.close()
+    # mc.close()
     other_response_fields = dict()
     other_response_fields['users'] = usernames
     print('debug - followers - success - output:', str(other_response_fields))
@@ -453,7 +464,8 @@ def followers(username):
 def following(username):
     print('debug - followers - GET - username:', str(username))  # debug
     request_json = request.json  # get json
-    mc = MongoClient(mongo_server)
+    # mc = MongoClient(mongo_server)
+    global mc
     user_coll = mc.twitterclone.user
     following_coll = mc.twitterclone.following
     if request_json is None:
@@ -492,7 +504,7 @@ def following(username):
         return error_msg({'error': 'no users found for tweets - server issue'})
 
     # return the names of the following
-    mc.close()
+    # mc.close()
     other_response_fields = dict()
     other_response_fields['users'] = usernames
     print('debug - following - success - output:', str(other_response_fields))
@@ -506,7 +518,8 @@ def follow():
     print('debug - follow - json:', request_json)  # debug
     session = request.cookies.get('cookie')  # get session
     # connect to login, user, following, and followers collections
-    mc = MongoClient(mongo_server)
+    # mc = MongoClient(mongo_server)
+    global mc
     login_coll = mc.twitterclone.login
     user_coll = mc.twitterclone.user
     following_coll = mc.twitterclone.following
@@ -610,7 +623,7 @@ def follow():
         #result = following_coll.update_one(check)
         result = following_coll.update_one({'_id': docs[0]['_id']}, {'$set': {"following": following}})
 
-    mc.close()
+    # mc.close()
     other_response_fields = dict()
     print('debug - follow - success - output:', str(other_response_fields))
     return success_msg(other_response_fields)

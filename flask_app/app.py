@@ -321,17 +321,21 @@ def search():
             return error_msg({'error': 'user not found'})
         following = docs[0]['following']
         check['uid'] = {"$in": following}
-   # if username is not None:
-   #     # get username id
-   #     # check for existing verified user
-   #     check_user = dict()
-   #     check_user['username'] = username
-   #     docs = [doc for doc in user_coll.find(check_user)]
-   #     if len(docs) != 1:
-   #         print('debug - search - error - check:', str(check), 'docs:', str(docs))
-   #         return error_msg({'error': 'incorrect password or user not verified or user does not exist'})
-   #     check['uid'] = docs[0]['_id']
-        
+
+    if username is not None:
+        # get username id
+        # check for existing verified user
+        check_user = dict()
+        check_user['username'] = username
+        docs = [doc for doc in user_coll.find(check_user)]
+        if len(docs) != 1:
+            print('debug - search - error - check:', str(check_user), 'docs:', str(docs))
+            return error_msg({'error': 'uid username error'})
+        check['uid'] = docs[0]['_id']
+
+    if q is not None:
+        check['$text'] = {'$search': q}
+
 
     # get tweets
     docs_t = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]

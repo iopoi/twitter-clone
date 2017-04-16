@@ -18,7 +18,8 @@ app = Flask(__name__)
 
 mongo_server = 'mongodb://192.168.1.35:27017/'
 mc = MongoClient(mongo_server)
-
+#mc.twitterclone.tweet.create_index(("content", pymongo.TEXT))
+mc.twitterclone.tweet.create_index([("content", 'text')])
 
 @app.route('/', methods = ['GET'])
 def index():
@@ -285,6 +286,7 @@ def search():
     tweet_coll = mc.twitterclone.tweet
     user_coll = mc.twitterclone.user
     login_coll = mc.twitterclone.login
+    following_coll = mc.twitterclone.following
 
     # get default values
     timestamp = int(request_json.get('timestamp', calendar.timegm(time.gmtime())))
@@ -305,7 +307,7 @@ def search():
     
     # form query M2
     if following != False:
-        # get list of follower ids
+        # get list of following ids
         check_session = dict()
         check_session['session'] = session
         docs = [doc for doc in login_coll.find(check_session)]
@@ -313,6 +315,7 @@ def search():
             print('debug - search - error - check:', str(check_session), 'docs:', str(docs))  # debug
             return error_msg({'error': 'not logged in'})
         s_uid = docs[0]['uid']
+        print("session", str(session), "session_uid", str(s_uid))
         check_following = dict()
         check_following['uid'] = s_uid
         docs = [doc for doc in following_coll.find(check_following)]
@@ -321,17 +324,28 @@ def search():
             return error_msg({'error': 'user not found'})
         following = docs[0]['following']
         check['uid'] = {"$in": following}
-
-    if username is not None:
-        # get username id
-        # check for existing verified user
-        check_user = dict()
-        check_user['username'] = username
-        docs = [doc for doc in user_coll.find(check_user)]
-        if len(docs) != 1:
-            print('debug - search - error - check:', str(check_user), 'docs:', str(docs))
-            return error_msg({'error': 'uid username error'})
-        check['uid'] = docs[0]['_id']
+        if username is not None:
+            # get username id
+            # check for existing verified user
+            check_user = dict()
+            check_user['username'] = username
+            docs = [doc for doc in user_coll.find(check_user)]
+            if len(docs) != 1:
+                print('debug - search - error - check:', str(check_user), 'docs:', str(docs))
+                return error_msg({'error': 'uid username error'})
+            if docs[0]['_id'] not in following:
+                return success_msg({'items': []})
+    else:
+        if username is not None:
+            # get username id
+            # check for existing verified user
+            check_user = dict()
+            check_user['username'] = username
+            docs = [doc for doc in user_coll.find(check_user)]
+            if len(docs) != 1:
+                print('debug - search - error - check:', str(check_user), 'docs:', str(docs))
+                return error_msg({'error': 'uid username error'})
+            check['uid'] = docs[0]['_id']
 
     if q is not None:
         check['$text'] = {'$search': q}
@@ -340,7 +354,7 @@ def search():
     # get tweets
     docs_t = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]
     if len(docs_t) == 0:
-        print('debug - search - error - check:', str(check), 'docs:', str(docs))  # debug
+        print('debug - search - error - check:', str(check), 'docs:', str(docs_t))  # debug
         return error_msg({'error': 'no tweets found'})
     
     # get usernames for tweets
@@ -360,7 +374,7 @@ def search():
         item_details['content'] = content
         item_details['timestamp'] = timestamp
         item_details['username'] = id_username[uid]
-        print("make tweet item - return")
+        #print("make tweet item - return")  #debug
         return item_details
     tids = [make_tweet_item(doc['_id'], doc['uid'], doc['content'], doc['timestamp']) for doc in docs_t]
 
@@ -519,6 +533,7 @@ def following(username):
 def follow():
     if request.method == 'GET':
         return render_template('follow.html')
+    print('debug - follow - request: ', str(request))
     request_json = request.json  # get json
     print('debug - follow - json:', request_json)  # debug
     session = request.cookies.get('cookie')  # get session
@@ -551,7 +566,8 @@ def follow():
     fid = docs[0]['_id']
 
     # add or remove follower
-    if request_json['follow'] == 'False':
+    if request_json['follow'] in ['False', 'false', False]:
+        print('unfollowtest!@#$%')
         # remove follower
         #print(request_json['follow'])
         #print('unfollow')
@@ -562,12 +578,15 @@ def follow():
         check['uid'] = fid
         docs = [doc for doc in followers_coll.find(check)]
         if len(docs) != 1:
-            print('debug - follow - error - check:', str(check), 'docs:', str(docs))  # debug
+            print('debug - unfollow - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': "follower doesn't exist"})
         followers = docs[0]['followers']  # TODO must check if followers is a list()
         if followers is None:
             followers = list()
         try:
+            followers = list(set(followers))
+            if uid not in followers:
+                return error_msg({'error': "cannot unfollow - username knows you don't follow them"})
             followers.remove(uid)
         except ValueError: 
             return error_msg({'error': "cannot unfollow someone you are not following"})
@@ -576,13 +595,16 @@ def follow():
         check['uid'] = uid
         docs = [doc for doc in following_coll.find(check)]
         if len(docs) != 1:
-            print('debug - follow - error - check:', str(check), 'docs:', str(docs))  # debug
+            print('debug - unfollow - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': "following doesn't exist"})
         following = docs[0]['following']  # TODO must check if followers is a list()
         #print('following - ', following)
         if following is None:
             following = list()
         try:
+            following = list(set(following))
+            if fid not in following:
+                return error_msg({'error': "cannot unfollow - you don't follow username"})
             following.remove(fid)
         except ValueError: 
             return error_msg({'error': "cannot unfollow someone you are not following"})
@@ -590,6 +612,7 @@ def follow():
         result = following_coll.update_one({'_id': docs[0]['_id']}, {'$set': {"following": following}})
 
     else:
+        print('followtest!@#$%')
         # add follower
         #print(request_json['follow'])
         #print('follow')
@@ -608,6 +631,9 @@ def follow():
         #print('followers - ', followers)
         if followers is None:
             followers = list()
+        followers = list(set(followers))
+        if uid in followers:
+            return error_msg({'error': "cannot follow - username already knows you follow them"})
         followers.append(uid)
         #print('followers - ', followers)
         #result = followers_coll.update_one(check)
@@ -623,6 +649,9 @@ def follow():
         #print('following - ', following)
         if following is None:
             following = list()
+        following = list(set(following))
+        if fid in following:
+            return error_msg({'error': "cannot follow - you are already following username"})
         following.append(fid)
         #print('following - ', following)
         #result = following_coll.update_one(check)

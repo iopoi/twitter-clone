@@ -7,11 +7,12 @@
     function login(){
         var timestamp = $("#timestamp").val();
         var limit = $("#limit").val();
+        var q = $("#q").val();
         $.ajax({
             type: "POST",
             url: "/search",
             contentType: "application/json",
-            data: JSON.stringify({timestamp: timestamp, limit: limit}),
+            data: JSON.stringify({timestamp: timestamp, limit: limit, q: q}),
             success: function (result) {
                 alert(JSON.stringify(result));
             }
@@ -25,6 +26,8 @@
         <input type="text" id="timestamp"><br>
         <p> Limit: </p>
         <input type="text" id ="limit"><br>
+        <p> Q: </p>
+        <input type="text" id ="q"><br>
         <input type="submit" value="Search">
    </form>
 </body>

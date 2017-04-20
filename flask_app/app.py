@@ -4,7 +4,7 @@ from flask import Flask, request, make_response, render_template
 from datetime import datetime
 import time, calendar
 import pymongo
-from pymongo import MongoClient
+from pymongo import MongoClient, IndexModel
 import bson
 from bson.objectid import ObjectId
 from bson.json_util import dumps
@@ -19,7 +19,28 @@ app = Flask(__name__)
 mongo_server = 'mongodb://192.168.1.35:27017/'
 mc = MongoClient(mongo_server)
 #mc.twitterclone.tweet.create_index(("content", pymongo.TEXT))
+mc.twitterclone.user.create_index([("email", 'hashed')])
+mc.twitterclone.user.create_index([("username", 'hashed')])
+mc.twitterclone.tweet.create_index([("uid", 'hashed')])
+mc.twitterclone.tweet.create_index([("timestamp", 1)])
 mc.twitterclone.tweet.create_index([("content", 'text')])
+mc.twitterclone.login.create_index([("uid", 'hashed')])
+mc.twitterclone.login.create_index([("session", 'hashed')])
+mc.twitterclone.followers.create_index([("uid", 'hashed')])
+mc.twitterclone.following.create_index([("uid", 'hashed')])
+
+#index1 = IndexModel([("username", 'text')])
+#index2 = IndexModel([("email", 'text')])
+#mc.twitterclone.user.create_indexes([index1, index2])
+##mc.twitterclone.user.create_indexes( IndexModel( [[("email", 'text')], [("username", 'text')]] ) )
+##mc.twitterclone.user.create_indexes([IndexModel([("username", 'text')])])
+##[("hello", DESCENDING), ("world", ASCENDING)]
+##[index1, index2]
+#mc.twitterclone.tweet.create_indexes([("uid", 'hashed'), ("timestamp", 1), ("content", 'text')])
+#mc.twitterclone.login.create_indexes([("uid", 'hashed'), ("session", 'hashed')])
+#mc.twitterclone.followers.create_indexes([("uid", 'hashed'), ("uid", 'hashed')])
+
+
 
 @app.route('/', methods = ['GET'])
 def index():
@@ -353,7 +374,8 @@ def search():
 
 
     # get tweets
-    docs_t = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]
+    #docs_t = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]
+    docs_t = [doc for doc in tweet_coll.find(check).sort(sort).limit(limit)]
     print('debug - search - doc - q:', str(docs_t))
     if len(docs_t) == 0:
 #        print('debug - search - error - check:', str(check), 'docs:', str(docs_t))  # debug

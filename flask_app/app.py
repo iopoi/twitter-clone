@@ -349,14 +349,16 @@ def search():
 
     if q is not None:
         check['$text'] = {'$search': q}
+        print('debug - search - error - check - q:', str(check))
 
 
     # get tweets
     docs_t = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]
+    print('debug - search - doc - q:', str(docs_t))
     if len(docs_t) == 0:
-        print('debug - search - error - check:', str(check), 'docs:', str(docs_t))  # debug
-        return error_msg({'error': 'no tweets found'})
-    
+#        print('debug - search - error - check:', str(check), 'docs:', str(docs_t))  # debug
+ #       return error_msg({'error': 'no tweets found'})
+        return success_msg({"items": []})    
     # get usernames for tweets
     check = dict()
     check['_id'] = {'$in': [doc['uid'] for doc in docs_t]}

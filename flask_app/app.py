@@ -9,11 +9,11 @@ import bson
 from bson.objectid import ObjectId
 from bson.json_util import dumps
 from bson.json_util import loads
+import os
 
 
 app = Flask(__name__)
 
-# TODO - move tables into mongo
 #cookies = dict()
 
 mongo_server = 'mongodb://192.168.1.35:27017/'
@@ -28,19 +28,10 @@ mc.twitterclone.login.create_index([("uid", 'hashed')])
 mc.twitterclone.login.create_index([("session", 'hashed')])
 mc.twitterclone.followers.create_index([("uid", 'hashed')])
 mc.twitterclone.following.create_index([("uid", 'hashed')])
+mc.twitterclone.like.create_index([("tid", 'hashed')])
+mc.twitterclone.parent.create_index([("tid", 'hashed')])
 
-#index1 = IndexModel([("username", 'text')])
-#index2 = IndexModel([("email", 'text')])
-#mc.twitterclone.user.create_indexes([index1, index2])
-##mc.twitterclone.user.create_indexes( IndexModel( [[("email", 'text')], [("username", 'text')]] ) )
-##mc.twitterclone.user.create_indexes([IndexModel([("username", 'text')])])
-##[("hello", DESCENDING), ("world", ASCENDING)]
-##[index1, index2]
-#mc.twitterclone.tweet.create_indexes([("uid", 'hashed'), ("timestamp", 1), ("content", 'text')])
-#mc.twitterclone.login.create_indexes([("uid", 'hashed'), ("session", 'hashed')])
-#mc.twitterclone.followers.create_indexes([("uid", 'hashed'), ("uid", 'hashed')])
-
-
+media_path = '/home/ubuntu/media/'
 
 @app.route('/', methods = ['GET'])
 def index():
@@ -200,13 +191,17 @@ def additem():
         return render_template('addtweet.html')
 
     request_json = request.json  # get json
-    print('debug - additme - json:', request_json)  # debug
+    print('debug - additem - json:', request_json)  # debug
     session = request.cookies.get('cookie')  # get session
+    parent = request_json.get('parent', None)
+    media = request_json.get('media', list())
+
     # connect to login and tweet collections
     # mc = MongoClient(mongo_server)
     global mc
     login_coll = mc.twitterclone.login
     tweet_coll = mc.twitterclone.tweet
+    parent_coll = mc.twitterclone.parent
     # check for session
     # optional - login app cookies
     #global cookies
@@ -217,12 +212,53 @@ def additem():
     if len(docs) != 1:
         print('debug - additem - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'not logged in'})
+
+
     # insert tweet
     tweet = dict()
     tweet['uid'] = docs[0]['uid']
     tweet['content'] = request_json['content']
     tweet['timestamp'] = calendar.timegm(time.gmtime())
+    tweet['parent'] = parent  # maybe put entry into an if statement
+    tweet['media'] = media
+    tweet['intrest'] = 0
     result = tweet_coll.insert_one(tweet)
+
+    # TOD if there are media files, insert the media id's into the media table sorted by tid.
+        # or store the mid's in the tweet object
+
+    # TOD if there is a parent, let the parent know there is a reply in the parent table
+        # when a tweet becomes a parent it gets a list of tid replies in the parent table
+
+    # if tweet is a child then inform the parent
+    if parent is not None:
+        # update collection
+        parent['tid'] = parent
+        child['$addToSet'] = {'children_tid': tid}
+        if like_coll.update(tweet, like)['nModified'] == 0:
+            return error_msg({'error': 'server issue - parent child insert error'})
+        return success_msg({})
+
+
+
+    # initialize parent entry in parent table
+    parent = dict()
+    parent['tid'] = result
+    # like['like_count'] = 0
+    parent['children_tid'] = list()
+    result_parent = parent_coll.insert_one(parent)
+
+
+    # initialize like entry
+    like = dict()
+    like['tid'] = result
+    like['like_count'] = 0
+    like['uids'] = list()
+    result_like = like_coll.insert_one(like)
+    # TODO might have to do retweet stuff as well
+
+
+
     #print('result')
     #print(result)
     #print(str(result))
@@ -259,6 +295,13 @@ def item(tid):
         item_details['id'] = str(docs[0]['_id'])
         item_details['content'] = docs[0]['content']
         item_details['timestamp'] = docs[0]['timestamp']
+        # TODO might want to if statement just in case
+        item_details['parent'] = docs[0]['parent']
+        item_details['media'] = docs[0]['media']
+
+        # TOD add parent id - optional
+        # TOD add media id's - optional
+
         # check for user of tweet
         check = dict()
         check['_id'] = docs[0]['uid']
@@ -283,6 +326,12 @@ def item(tid):
         if len(docs) != 1:
             print('debug - item/delete - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': 'incorrect tweet id'})
+
+        # TOD delete media files related to tweet
+        for file_name in docs['media']
+            print('debug - item/delete file - ', str(media_path + file_name))
+            os.remove(media_path + file_name)
+
         # delete tweet
         result = tweet_coll.delete_many(check)
         # mc.close()
@@ -292,6 +341,114 @@ def item(tid):
 
     return 405
 
+
+@app.route('/item/<tid>/like', methods = ['GET', 'POST'])
+def like():
+    if request.method == 'GET':
+        return render_template('like.html')
+
+    # to like a tweet
+    # the logged in users id should be added to like_tweet collection
+
+    # get the uid of the session
+    # get the tid of the tweet
+
+    # use tid to update uid in the like_tweet collection
+
+
+    global mc
+    tweet_coll = mc.twitterclone.tweet
+    like_coll = mc.twitterclone.like
+
+    session = request.cookies.get('cookie')  # get session
+    request_json = request.json
+
+    # get session uid
+    check = dict()
+    check['session'] = session
+    docs = [doc for doc in login_coll.find(check)]
+    if len(docs) != 1:
+        print('debug - follow - error - check:', str(check), 'docs:', str(docs))  # debug
+        return error_msg({'error': 'not logged in'})
+    uid = docs[0]['uid']
+
+    # get tweet tid
+    tid = loads('{"$oid": "' + tid + '"}')
+
+    # TODO if this works migrate it to follow
+    # like or unlike
+    like_bool = bool(request_json.get('like', True))
+    if like_bool != False:
+        action = "$addToSet"  # like
+        increment = 1
+    else:
+        action = "$pull"  # unlike
+        increment = -1
+
+    # update collection
+    tweet['tid'] = tid
+    like = dict()
+    like[action] = {'uids': uid}
+    like['$inc'] = {'like_count': increment}
+    if like_coll.update(tweet, like)['nModified'] == 0:
+        return error_msg({'error': 'cannot like or unlike twice'})
+    else:
+        # increment intrest rating in tweet object
+        tweet['_id'] = tid
+        like = dict()
+        like['$inc'] = {'intrest': increment}
+        if tweet_coll.update(tweet, like)['nModified'] == 0:
+            return error_msg({'error': 'cannot update tweet intrest'})
+    return success_msg({})
+
+    # like = bool(request_json.get('like', True))
+    # if like != False:
+    #     # true
+
+
+
+    #     # # check if person already liked tweet
+    #     # check = dict()
+    #     # check['uids'] = uid
+    #     # if len([doc for doc in like_coll.find(check)]) > 0:
+    #     #     # if so throw error
+    #     #     return error_msg({'error': 'cannot like an already liked tweet'})
+
+    #     # # add uid to like
+
+
+    #     like = dict()
+    #     like['tid'] = tid
+    #     # like['email'] = request_json['email']
+    #     # like['password'] = request_json['password']
+    #     # like['verified'] = False
+    #     # like['verify_key'] = randomString()
+    #     result = like_coll.insert_one(like)
+
+    # else:
+    #     # flase
+
+    #     # check if person already did not like tweet
+    #     check = dict()
+    #     check['uids'] = uid
+    #     if len([doc for doc in like_coll.find(check)]) == 0:
+    #         # if so throw error
+    #         return error_msg({'error': 'cannot unlike a tweet that was never liked'})
+
+
+    # # print(id)
+    # # print(loads(id))
+    # # # connect to tweet and user collection
+
+    # # tweet_coll = mc.twitterclone.tweet
+    # # user_coll = mc.twitterclone.user
+    # # # check for tweet with tid
+    # # check = dict()
+    # # check['_id'] = loads(id)
+    # # docs = [doc for doc in tweet_coll.find(check)]
+    # # if len(docs) != 1:
+    # #     print('debug - item/get - error - check:', str(check), 'docs:', str(docs))  # debug
+    # #     return error_msg({'error': 'incorrect tweet id'})
 
 @app.route('/search', methods = ['GET','POST'])
 def search():
@@ -318,13 +475,20 @@ def search():
     q = request_json.get('q', None)
     username = request_json.get('username', None)
     following = bool(request_json.get('following', True))
+    rank = request_json.get('rank', 'intrest')
+    parent = request_json.get('parent', None)
+    replies = bool(request_json.get('replies', True))
+    
 
     # form query M1
     check = dict()
     if timestamp is not None:
         check['timestamp'] = {"$lt": timestamp}
     sort = list()
-    sort.append(("timestamp", pymongo.DESCENDING))
+    if rank == 'intrest':  # from M3 query
+        sort.append(('intrest', pymongo.DESCENDING))
+    else:  # from M2 query
+        sort.append(("timestamp", pymongo.DESCENDING))
     
     # form query M2
     if following != False:
@@ -372,6 +536,17 @@ def search():
         check['$text'] = {'$search': q}
         print('debug - search - error - check - q:', str(check))
 
+    # form query M3 - TOD
+    # sort by interest - TOD
+    # filter on whether a tweet is a child of parent id - TOD
+    # filter on whether a tweet had a parent or not - TOD
+
+    if parent is not None:
+        check['parent'] = parent
+
+    if not replies:
+        check['parent'] = {'$exists': False}
+    
 
     # get tweets
     #docs_t = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]
@@ -604,7 +779,7 @@ def follow():
         if len(docs) != 1:
             print('debug - unfollow - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': "follower doesn't exist"})
-        followers = docs[0]['followers']  # TODO must check if followers is a list()
+        followers = docs[0]['followers']
         if followers is None:
             followers = list()
         try:
@@ -621,7 +796,7 @@ def follow():
         if len(docs) != 1:
             print('debug - unfollow - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': "following doesn't exist"})
-        following = docs[0]['following']  # TODO must check if followers is a list()
+        following = docs[0]['following']
         #print('following - ', following)
         if following is None:
             following = list()
@@ -650,8 +825,8 @@ def follow():
         if len(docs) != 1:
             print('debug - follow - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': "follower doesn't exist"})
-        #followers = docs[0]['followers'].append(uid)  # TODO must check if followers is a list()
-        followers = docs[0]['followers']  # TODO must check if followers is a list()
+        #followers = docs[0]['followers'].append(uid)
+        followers = docs[0]['followers']
         #print('followers - ', followers)
         if followers is None:
             followers = list()
@@ -669,7 +844,7 @@ def follow():
         if len(docs) != 1:
             print('debug - follow - error - check:', str(check), 'docs:', str(docs))  # debug
             return error_msg({'error': "following doesn't exist"})
-        following = docs[0]['following']  # TODO must check if followers is a list()
+        following = docs[0]['following']
         #print('following - ', following)
         if following is None:
             following = list()
@@ -685,6 +860,39 @@ def follow():
     other_response_fields = dict()
     print('debug - follow - success - output:', str(other_response_fields))
     return success_msg(other_response_fields)
+
+
+@app.route('/addmedia', methods = ['GET', 'POST'])
+def addmedia():
+    if request.method == 'GET':
+        return render_template('addmedia.html')
+
+    # generate id
+    l = 32
+    s = string.ascii_letters+string.digits
+    file_id = ''.join(random.sample(s, l))
+    file = request.files['file'].save(media_path+file_id)
+
+    # save file
+    if (False):  # TODO check for save success or file retrival
+        return error_msg({'error': "file error"})
+
+    # return id
+    other_response_fields = dict()
+    other_response_fields['id'] = file_id
+    success_msg(other_response_fields)
+
+    # TOD - fill method
+
+
+
+@app.route('/media/<mid>', methods = ['GET'])
+def media():
+    # returns file
+    return send_from_directory(media_path, mid)
+
+    # TOD - fill method
+    
 
 
 if __name__ == '__main__':

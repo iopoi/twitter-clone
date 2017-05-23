@@ -250,6 +250,7 @@ def additem():
     parent = dict()
     print("result:", result)
     parent['tid'] = result.inserted_id
+#    parent['tid'] = result
     parent['children_count'] = 0
     parent['children_tid'] = list()
     result_parent = parent_coll.insert_one(parent)
@@ -336,6 +337,8 @@ def item(tid):
         # TOD delete media files related to tweet
         print("docs['media'] =", str(docs))
         for file_name in docs[0]['media']:
+#        print()  # debug
+#        for file_name in docs['media']
             print('debug - item/delete file - ', str(media_path + file_name))
             os.remove(media_path + file_name)
 

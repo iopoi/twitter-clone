@@ -9,6 +9,8 @@ import bson
 from bson.objectid import ObjectId
 from bson.json_util import dumps
 from bson.json_util import loads
+import string
+import random
 import os
 
 
@@ -16,7 +18,8 @@ app = Flask(__name__)
 
 #cookies = dict()
 
-mongo_server = 'mongodb://192.168.1.35:27017/'
+#mongo_server = 'mongodb://192.168.1.35:27017/'
+mongo_server = 'mongodb://192.168.1.45:27017/'
 mc = MongoClient(mongo_server)
 #mc.twitterclone.tweet.create_index(("content", pymongo.TEXT))
 mc.twitterclone.user.create_index([("email", 'hashed')])
@@ -31,7 +34,8 @@ mc.twitterclone.following.create_index([("uid", 'hashed')])
 mc.twitterclone.like.create_index([("tid", 'hashed')])
 mc.twitterclone.parent.create_index([("tid", 'hashed')])
 
-media_path = '/home/ubuntu/media/'
+media_path = '/home/ubuntu/media'
+app.config['UPLOAD_FOLDER'] = media_path
 
 @app.route('/', methods = ['GET'])
 def index():
@@ -202,6 +206,7 @@ def additem():
     login_coll = mc.twitterclone.login
     tweet_coll = mc.twitterclone.tweet
     parent_coll = mc.twitterclone.parent
+    like_coll = mc.twitterclone.like
     # check for session
     # optional - login app cookies
     #global cookies
@@ -243,15 +248,16 @@ def additem():
 
     # initialize parent entry in parent table
     parent = dict()
-    parent['tid'] = result
-    # like['like_count'] = 0
+    print("result:", result)
+    parent['tid'] = result.inserted_id
+    parent['children_count'] = 0
     parent['children_tid'] = list()
     result_parent = parent_coll.insert_one(parent)
 
 
     # initialize like entry
     like = dict()
-    like['tid'] = result
+    like['tid'] = result.inserted_id
     like['like_count'] = 0
     like['uids'] = list()
     result_like = like_coll.insert_one(like)
@@ -328,7 +334,8 @@ def item(tid):
             return error_msg({'error': 'incorrect tweet id'})
 
         # TOD delete media files related to tweet
-        for file_name in docs['media']
+        print("docs['media'] =", str(docs))
+        for file_name in docs[0]['media']:
             print('debug - item/delete file - ', str(media_path + file_name))
             os.remove(media_path + file_name)
 
@@ -650,7 +657,7 @@ def followers(username):
         print('debug - followers - error - uid - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'user not found'})
     uid = docs[0]['_id']
-    #print('uid:', str(uid))
+    #print('uid:', str(uid))app.config['UPLOAD_FOLDER']
     # get followers
     check = dict()
     check['uid'] = uid
@@ -867,15 +874,25 @@ def addmedia():
     if request.method == 'GET':
         return render_template('addmedia.html')
 
+    print("/addmedia")
     # generate id
     l = 32
     s = string.ascii_letters+string.digits
     file_id = ''.join(random.sample(s, l))
-    file = request.files['file'].save(media_path+file_id)
 
-    # save file
-    if (False):  # TODO check for save success or file retrival
-        return error_msg({'error': "file error"})
+    
+    print('request data:', request.files)
+   # print("file data:", request.files['file'])
+    if 'file' not in request.files:
+        return error_msg({'error': 'no file attached'})
+    f = request.files['file']
+    f.save(os.path.join(app.config['UPLOAD_FOLDER'], file_id))
+    #print("file_id =", file_id)
+    #file_attachment = request.files['file'].save(media_path+file_id)
+    #print("file from request -", file_attachment)
+    ## save file
+    #if (False):  # TODO check for save success or file retrival
+    #    return error_msg({'error': "file error"})
 
     # return id
     other_response_fields = dict()

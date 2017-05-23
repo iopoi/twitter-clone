@@ -16,7 +16,8 @@ app = Flask(__name__)
 
 #cookies = dict()
 
-mongo_server = 'mongodb://192.168.1.35:27017/'
+# mongo_server = 'mongodb://192.168.1.35:27017/'
+mongo_server = 'mongodb://192.168.1.45:27017/'
 mc = MongoClient(mongo_server)
 #mc.twitterclone.tweet.create_index(("content", pymongo.TEXT))
 mc.twitterclone.user.create_index([("email", 'hashed')])
@@ -244,7 +245,7 @@ def additem():
     # initialize parent entry in parent table
     parent = dict()
     parent['tid'] = result
-    # like['like_count'] = 0
+    parent['children_count'] = 0
     parent['children_tid'] = list()
     result_parent = parent_coll.insert_one(parent)
 
@@ -328,6 +329,7 @@ def item(tid):
             return error_msg({'error': 'incorrect tweet id'})
 
         # TOD delete media files related to tweet
+        print()  # debug
         for file_name in docs['media']
             print('debug - item/delete file - ', str(media_path + file_name))
             os.remove(media_path + file_name)

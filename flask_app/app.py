@@ -1,6 +1,6 @@
 import json
 from tools import error_msg, success_msg, randomString #, sendemail
-from flask import Flask, request, make_response, render_template
+from flask import Flask, request, make_response, render_template, send_file
 from datetime import datetime
 import time, calendar
 import pymongo
@@ -12,7 +12,7 @@ from bson.json_util import loads
 import string
 import random
 import os
-
+import traceback
 
 app = Flask(__name__)
 
@@ -885,12 +885,41 @@ def addmedia():
 
     
     print('request data:', request.files)
+
+    ## Request object analysis 
+    ## log data to console and stdout
+
+    print type(request.files["content"])
+    print dir(request.files["content"])
+    print request.files["content"].save.__doc__
+    #print request.files["content"].save.__doc_ 
+
+    ##
+    ## This chunk tests whether we can save fileobjects
+    ## to the local filesystem. Exceptions are | to stdout
+    ##
+    
+    try:
+        ## Retrieve FileObject from request
+        fo = request.files["content"]
+
+        ## Save fileobjext to desired filepath
+        filepath = app.config['UPLOAD_FOLDER']
+        savename = file_id
+        fo.save(os.path.join(filepath, savename), buffer_size=10000)
+    except Exception, e:
+        print e
+        traceback.print_exc()
+    
    # print("file data:", request.files['file'])
-    if 'file' not in request.files:
-        return error_msg({'error': 'no file attached'})
-    f = request.files['file']
-    f.save(os.path.join(app.config['UPLOAD_FOLDER'], file_id))
-    #print("file_id =", file_id)
+   #if 'file' not in request.files:
+   #     print('request: ', request)
+   #     return error_msg({'error': 'no file attached'})
+   # print('file exists')
+   # f = request.files['file']
+   # print('file contents', str(f))
+   # f.save(os.path.join(app.config['UPLOAD_FOLDER'], file_id))
+   # print("file_id =", file_id)
     #file_attachment = request.files['file'].save(media_path+file_id)
     #print("file from request -", file_attachment)
     ## save file
@@ -900,19 +929,22 @@ def addmedia():
     # return id
     other_response_fields = dict()
     other_response_fields['id'] = file_id
-    success_msg(other_response_fields)
+    msg = success_msg(other_response_fields)
 
-    # TOD - fill method
+    return msg 
+    
 
 
 
 @app.route('/media/<mid>', methods = ['GET'])
-def media():
+def media(mid):
     # returns file
-    return send_from_directory(media_path, mid)
-
+    filepath = app.config['UPLOAD_FOLDER']
+    #fo.save(os.path.join(filepath, mid), buffer_size=10000)
+    #return send_from_directory(media_path, mid)
+    #res = make_response(open(os.path.abspath(os.path.join(filepath, mid))).read())
     # TOD - fill method
-    
+    return send_file(os.path.abspath(os.path.join(filepath, mid)), mimetype="image/gif")
 
 
 if __name__ == '__main__':

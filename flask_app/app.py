@@ -1,6 +1,6 @@
 import json
 from tools import error_msg, success_msg, randomString #, sendemail
-from flask import Flask, request, make_response, render_template, send_file
+from flask import Flask, request, make_response, render_template,send_file
 from datetime import datetime
 import time, calendar
 import pymongo
@@ -236,14 +236,30 @@ def additem():
         # when a tweet becomes a parent it gets a list of tid replies in the parent table
 
     # if tweet is a child then inform the parent
-    if parent is not None:
-        # update collection
-        parent['tid'] = parent
-        child['$addToSet'] = {'children_tid': tid}
-        if like_coll.update(tweet, like)['nModified'] == 0:
-            return error_msg({'error': 'server issue - parent child insert error'})
-        return success_msg({})
+#    if parent is not None:
+#        print('debug - additem - parent format', parent)
+#        # update collection
+#        parent['tid'] = loads('{"$oid": "' + parent + '"}')  # changed the formating of parent
+#        child['$addToSet'] = {'children_tid': tid}
+#        if like_coll.update(tweet, like)['nModified'] == 0:
+#            return error_msg({'error': 'server issue - parent child insert error'})
+#        #return success_msg({})  # didn't think this was necessary
 
+    # if tweet is a child then inform the parent
+    if parent is not None:
+        print('debug - additem - parent format', parent)
+        # update collection
+       # parent = dict()
+        parent_d = dict()
+        parent_d['tid'] = loads('{"$oid": "' + parent + '"}')  # changed the formating of parent
+        tid = result.inserted_id
+        child = dict()
+        child['$addToSet'] = {'children_tid': tid}
+        print('debug - additem - parent info', parent_d)
+        print('debug - additem - child info', child) 
+        if parent_coll.update(parent_d, child)['nModified'] == 0:
+            return error_msg({'error': 'server issue - parent child insert error'})
+        #return success_msg({})  # didn't think this was necessary
 
 
     # initialize parent entry in parent table
@@ -339,8 +355,8 @@ def item(tid):
         for file_name in docs[0]['media']:
 #        print()  # debug
 #        for file_name in docs['media']
-            print('debug - item/delete file - ', str(media_path + file_name))
-            os.remove(media_path + file_name)
+            print('debug - item/delete file - ', str(os.path.join(media_path, file_name)))
+            os.remove(os.path.join(media_path, file_name))
 
         # delete tweet
         result = tweet_coll.delete_many(check)
@@ -353,10 +369,10 @@ def item(tid):
 
 
 @app.route('/item/<tid>/like', methods = ['GET', 'POST'])
-def like():
+def like(tid):
     if request.method == 'GET':
         return render_template('like.html')
-
+    print('debug - like - info - tid='+str(tid))
     # to like a tweet
     # the logged in users id should be added to like_tweet collection
 
@@ -369,6 +385,7 @@ def like():
     global mc
     tweet_coll = mc.twitterclone.tweet
     like_coll = mc.twitterclone.like
+    login_coll = mc.twitterclone.login
 
     session = request.cookies.get('cookie')  # get session
     request_json = request.json
@@ -396,14 +413,18 @@ def like():
         increment = -1
 
     # update collection
+    tweet = dict()  # added this idk - check this TODO
     tweet['tid'] = tid
     like = dict()
     like[action] = {'uids': uid}
     like['$inc'] = {'like_count': increment}
+    print('debug - like - info - tweet', tweet)
+    print('debug - like - info - like', like)
     if like_coll.update(tweet, like)['nModified'] == 0:
         return error_msg({'error': 'cannot like or unlike twice'})
     else:
         # increment intrest rating in tweet object
+        tweet = dict()
         tweet['_id'] = tid
         like = dict()
         like['$inc'] = {'intrest': increment}
@@ -488,7 +509,7 @@ def search():
     rank = request_json.get('rank', 'intrest')
     parent = request_json.get('parent', None)
     replies = bool(request_json.get('replies', True))
-    
+    hasMedia = bool(request_json.get('hasMedia', False))
 
     # form query M1
     check = dict()
@@ -497,6 +518,7 @@ def search():
     sort = list()
     if rank == 'intrest':  # from M3 query
         sort.append(('intrest', pymongo.DESCENDING))
+      #  sort.append(("timestamp", pymongo.DESCENDING))  # maybe
     else:  # from M2 query
         sort.append(("timestamp", pymongo.DESCENDING))
     
@@ -556,7 +578,9 @@ def search():
 
     if not replies:
         check['parent'] = {'$exists': False}
-    
+
+    if hasMedia:
+        check['media'] = {'media': {'$not': {'$size': 0}}}
 
     # get tweets
     #docs_t = [doc for doc in tweet_coll.find(check).sort(sort)][:limit]
@@ -930,7 +954,7 @@ def addmedia():
     other_response_fields = dict()
     other_response_fields['id'] = file_id
     msg = success_msg(other_response_fields)
-
+    print('debug - /addmedia - return message', msg)  # debug
     return msg 
     
 

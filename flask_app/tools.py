@@ -42,3 +42,21 @@ def sendemail(key, toaddrs):
     server.login(username,password)
     server.sendmail(fromaddr, toaddrs, msg)
     server.quit()
+
+
+# Memcached methods
+
+# TODO must to testing and error catching
+def mem_login(mem, session, uid):
+    mem.set(session, (True, uid))
+
+def mem_logout(mem, session):
+    mem.set(session, (False, None))
+
+def mem_check_login(mem, session):
+    is_login = mem.get(session)
+    if is_login is None:
+        return (None, None)
+    return is_login
+
+

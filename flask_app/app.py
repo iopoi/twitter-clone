@@ -1,5 +1,5 @@
 import json
-from tools import error_msg, success_msg, randomString #, sendemail
+from tools import error_msg, success_msg, randomString#, mem_login, mem_logout, mem_check_login #, sendemail
 from flask import Flask, request, make_response, render_template,send_file
 from datetime import datetime
 import time, calendar
@@ -13,13 +13,19 @@ import string
 import random
 import os
 import traceback
+#import memcache
+
+from cassandra.cluster import Cluster
 
 app = Flask(__name__)
 
 #cookies = dict()
+#memcached_server = '192.168.1.37:11211'
+#mem = memcache.Client([memcached_server], debug=0)
 
 #mongo_server = 'mongodb://192.168.1.35:27017/'
-mongo_server = 'mongodb://192.168.1.45:27017/'
+#mongo_server = 'mongodb://192.168.1.45:27017/'
+mongo_server = 'mongodb://192.168.1.49:27017/'
 mc = MongoClient(mongo_server)
 #mc.twitterclone.tweet.create_index(("content", pymongo.TEXT))
 mc.twitterclone.user.create_index([("email", 'hashed')])
@@ -34,8 +40,26 @@ mc.twitterclone.following.create_index([("uid", 'hashed')])
 mc.twitterclone.like.create_index([("tid", 'hashed')])
 mc.twitterclone.parent.create_index([("tid", 'hashed')])
 
+#cluster = Cluster(['192.168.1.52'])
+cluster = Cluster()
+cass = cluster.connect()
+keyspace = 'tweet_images'
+cass.execute("""
+    CREATE KEYSPACE IF NOT EXISTS %s
+    WITH replication = { 'class': 'SimpleStrategy', 'replication_factor': '2' }
+    """ % keyspace)
+cass.set_keyspace(keyspace)
+cass.execute("""
+    CREATE TABLE IF NOT EXISTS images (
+        key text,
+        image blob,
+        PRIMARY KEY (key)
+    )
+    """)
+
 media_path = '/home/ubuntu/media'
 app.config['UPLOAD_FOLDER'] = media_path
+app.config['MAX_CONTENT_LENGTH'] = 16000000  # to limit large images
 
 @app.route('/', methods = ['GET'])
 def index():
@@ -99,6 +123,7 @@ def login():
     login['uid'] = docs[0]['_id']
     login['session'] = randomString()
     login['last_login'] = calendar.timegm(time.gmtime())
+#    mem_login(mem, login['session'], login['uid'])  # TODO test
     result = login_coll.insert_one(login)
     # optional - login app cookies
     #global cookies
@@ -130,6 +155,7 @@ def logout():
         print('debug - logout - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'not logged in'})
     # logs out user
+#    mem_logout(mem, session)
     result = login_coll.delete_many(check)
     # optional - logout app cookies
     #global cookies
@@ -211,13 +237,23 @@ def additem():
     # optional - login app cookies
     #global cookies
     #cookies[login['session']] = login['uid']
-    check = dict()
-    check['session'] = session
-    docs = [doc for doc in login_coll.find(check)]
-    if len(docs) != 1:
-        print('debug - additem - error - check:', str(check), 'docs:', str(docs))  # debug
-        return error_msg({'error': 'not logged in'})
 
+    check = dict()
+#    is_mem_login = mem_check_login(mem, session)
+    is_mem_login = (None, None)
+    print('debug - additem - info - is_mem_login:', is_mem_login)
+    if is_mem_login[0] == True:
+        docs = [{'uid': is_mem_login[1]}]
+    elif is_mem_login[0] == False:
+        return error_msg({'error': 'not logged in'})
+    elif is_mem_login[0] is None:
+        check['session'] = session
+        docs = [doc for doc in login_coll.find(check)]
+        if len(docs) != 1:
+            print('debug - additem - error - check:', str(check), 'docs:', str(docs))  # debug
+            return error_msg({'error': 'not logged in'})
+    else:
+        return error_msg({'error': 'additem server error'})
 
     # insert tweet
     tweet = dict()
@@ -237,7 +273,7 @@ def additem():
 
     # if tweet is a child then inform the parent
 #    if parent is not None:
-#        print('debug - additem - parent format', parent)
+  #      print('debug - additem - parent format', parent)
 #        # update collection
 #        parent['tid'] = loads('{"$oid": "' + parent + '"}')  # changed the formating of parent
 #        child['$addToSet'] = {'children_tid': tid}
@@ -355,8 +391,16 @@ def item(tid):
         for file_name in docs[0]['media']:
 #        print()  # debug
 #        for file_name in docs['media']
-            print('debug - item/delete file - ', str(os.path.join(media_path, file_name)))
-            os.remove(os.path.join(media_path, file_name))
+            # file system remove
+            #print('debug - item/delete file - ', str(os.path.join(media_path, file_name)))
+            #os.remove(os.path.join(media_path, file_name))
+
+            # Cassandra remove
+            query = "DELETE FROM images WHERE key=%s"
+            rows = cass.execute(query, [file_name])
+            print "deleted image from cass"
+            print rows
+
 
         # delete tweet
         result = tweet_coll.delete_many(check)
@@ -927,11 +971,34 @@ def addmedia():
         ## Retrieve FileObject from request
         fo = request.files["content"]
 
-        ## Save fileobjext to desired filepath
-        filepath = app.config['UPLOAD_FOLDER']
-        savename = file_id
-        fo.save(os.path.join(filepath, savename), buffer_size=10000)
+
+        # Cassandra insert
+        query = "INSERT INTO images (key,image) VALUES (?,?)"
+        prep = cass.prepare(query)
+        cass.execute(prep,[file_id, fo.read()])
+
+
+        # Mongo insert
+#        global mc
+#        image_coll = mc.twitterclone.image
+#        image = dict()
+#        image['data'] = fo
+#       # result = image_coll.insert_one(image)
+#       # result = image_coll.insert_one(request)
+#        result = {0 : image_coll.insert_one(request)}
+#        print('debug - addmedia - inserted image - result', result)
+#        file_id = result.inserted_id
+
+#        # file system insert
+#        print('debug - addmedia - content_length')
+#        print(str(fo.content_length))
+#
+#        ## Save fileobjext to desired filepath
+#        filepath = app.config['UPLOAD_FOLDER']
+#        savename = file_id
+#        fo.save(os.path.join(filepath, savename), buffer_size=10000)
     except Exception, e:
+     #   print('exception - addmedia - inserted image - result', result)
         print e
         traceback.print_exc()
     
@@ -968,9 +1035,39 @@ def media(mid):
     #return send_from_directory(media_path, mid)
     #res = make_response(open(os.path.abspath(os.path.join(filepath, mid))).read())
     # TOD - fill method
-    return send_file(os.path.abspath(os.path.join(filepath, mid)), mimetype="image/gif")
+
+
+    # Cassandra return
+    query = "SELECT image FROM images WHERE key=%s"
+    rows = cass.execute(query, [mid])  
+#    print "image data mid="+mid
+#    print rows
+    return send_file(rows[0], mimetype="image/gif")
+
+    # mongo return
+#    global mc
+#    image_coll = mc.twitterclone.image
+#    check = dict()
+#    check['_id'] = mid
+#    docs = [doc for doc in image_coll.find(check)]
+#    if len(docs) != 1:
+#        print('debug - media - error - check:', str(check), 'docs:', str(docs))  # debug
+#        return error_msg({'error': 'image not found'})
+#    # get session uid
+#    image_file = docs[0]['data'] 
+#  #  return image_file
+#  #  return image_file.files["content"]
+#    return image_file.files["content"][0]
+
+
+    # filesystem return
+#    return send_file(os.path.abspath(os.path.join(filepath, mid)), mimetype="image/gif")
+
+    
+
+
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
-
+    #app.run(debug=True)
+    app.run(debug=False)

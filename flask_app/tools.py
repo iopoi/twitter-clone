@@ -3,6 +3,15 @@ import random
 import json
 import smtplib
 
+import pymongo
+from pymongo import MongoClient, IndexModel
+import bson
+from bson.objectid import ObjectId
+from bson.json_util import dumps
+from bson.json_util import loads
+
+import logging as log
+
 fromaddr = ''
 username = ''
 password = ''
@@ -59,4 +68,24 @@ def mem_check_login(mem, session):
         return (None, None)
     return is_login
 
+def check_login(login_coll, mem, session):
+    check = dict()
+    is_mem_login = mem_check_login(mem, session)
+    log.debug('debug - tools - check login - info - is_mem_login:', is_mem_login)
+    if is_mem_login[0] == True:
+        docs = [{'uid': is_mem_login[1]}]
+    elif is_mem_login[0] == False:
+        return error_msg({'error': 'not logged in'})
+    elif is_mem_login[0] is None:
+        check['session'] = session
+        docs = [doc for doc in login_coll.find(check)]
+        if len(docs) != 1:
+            log.debug('debug - additem - error - check:', str(check), 'docs:', str(docs))  # debug
+            return error_msg({'error': 'not logged in'})
+    else:
+        return error_msg({'error': 'additem server error'})
+    
+    return docs
+    
+    
 

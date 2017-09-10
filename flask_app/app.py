@@ -1,5 +1,5 @@
 import json
-from tools import error_msg, success_msg, randomString#, mem_login, mem_logout, mem_check_login #, sendemail
+from tools import error_msg, success_msg, randomString, mem_login, mem_logout, mem_check_login #, sendemail
 from flask import Flask, request, make_response, render_template,send_file
 from datetime import datetime
 import time, calendar
@@ -13,49 +13,57 @@ import string
 import random
 import os
 import traceback
-#import memcache
+import memcache
 
 from cassandra.cluster import Cluster
 
 app = Flask(__name__)
 
 #cookies = dict()
-#memcached_server = '192.168.1.37:11211'
-#mem = memcache.Client([memcached_server], debug=0)
 
-#mongo_server = 'mongodb://192.168.1.35:27017/'
-#mongo_server = 'mongodb://192.168.1.45:27017/'
-mongo_server = 'mongodb://192.168.1.49:27017/'
-mc = MongoClient(mongo_server)
-#mc.twitterclone.tweet.create_index(("content", pymongo.TEXT))
-mc.twitterclone.user.create_index([("email", 'hashed')])
-mc.twitterclone.user.create_index([("username", 'hashed')])
-mc.twitterclone.tweet.create_index([("uid", 'hashed')])
-mc.twitterclone.tweet.create_index([("timestamp", 1)])
-mc.twitterclone.tweet.create_index([("content", 'text')])
-mc.twitterclone.login.create_index([("uid", 'hashed')])
-mc.twitterclone.login.create_index([("session", 'hashed')])
-mc.twitterclone.followers.create_index([("uid", 'hashed')])
-mc.twitterclone.following.create_index([("uid", 'hashed')])
-mc.twitterclone.like.create_index([("tid", 'hashed')])
-mc.twitterclone.parent.create_index([("tid", 'hashed')])
+mc = None
+cass = None
+mem = None
 
-#cluster = Cluster(['192.168.1.52'])
-cluster = Cluster()
-cass = cluster.connect()
-keyspace = 'tweet_images'
-cass.execute("""
-    CREATE KEYSPACE IF NOT EXISTS %s
-    WITH replication = { 'class': 'SimpleStrategy', 'replication_factor': '2' }
-    """ % keyspace)
-cass.set_keyspace(keyspace)
-cass.execute("""
-    CREATE TABLE IF NOT EXISTS images (
-        key text,
-        image blob,
-        PRIMARY KEY (key)
-    )
-    """)
+@app.before_first_request
+def init_clients():
+    global mc
+    global cass
+    global mem
+
+    mongo_server = 'mongodb://192.168.1.49:27017/'
+    mc = MongoClient(mongo_server)
+    mc.twitterclone.user.create_index([("email", 'hashed')])
+    mc.twitterclone.user.create_index([("username", 'hashed')])
+    mc.twitterclone.tweet.create_index([("uid", 'hashed')])
+    mc.twitterclone.tweet.create_index([("timestamp", 1)])
+    mc.twitterclone.tweet.create_index([("content", 'text')])
+    mc.twitterclone.login.create_index([("uid", 'hashed')])
+    mc.twitterclone.login.create_index([("session", 'hashed')])
+    mc.twitterclone.followers.create_index([("uid", 'hashed')])
+    mc.twitterclone.following.create_index([("uid", 'hashed')])
+    mc.twitterclone.like.create_index([("tid", 'hashed')])
+    mc.twitterclone.parent.create_index([("tid", 'hashed')])
+    
+    #cluster = Cluster(['192.168.1.52'])
+    cluster = Cluster()
+    cass = cluster.connect()
+    keyspace = 'tweet_images'
+    cass.execute("""
+        CREATE KEYSPACE IF NOT EXISTS %s
+        WITH replication = { 'class': 'SimpleStrategy', 'replication_factor': '2' }
+        """ % keyspace)
+    cass.set_keyspace(keyspace)
+    cass.execute("""
+        CREATE TABLE IF NOT EXISTS images (
+            key text,
+            image blob,
+            PRIMARY KEY (key)
+        )
+        """)
+    
+    memcached_server = '192.168.1.37:11211'
+    mem = memcache.Client([memcached_server], debug=0)
 
 media_path = '/home/ubuntu/media'
 app.config['UPLOAD_FOLDER'] = media_path
@@ -123,7 +131,7 @@ def login():
     login['uid'] = docs[0]['_id']
     login['session'] = randomString()
     login['last_login'] = calendar.timegm(time.gmtime())
-#    mem_login(mem, login['session'], login['uid'])  # TODO test
+    mem_login(mem, login['session'], login['uid'])  # TODO test
     result = login_coll.insert_one(login)
     # optional - login app cookies
     #global cookies
@@ -155,7 +163,7 @@ def logout():
         print('debug - logout - error - check:', str(check), 'docs:', str(docs))  # debug
         return error_msg({'error': 'not logged in'})
     # logs out user
-#    mem_logout(mem, session)
+    mem_logout(mem, session)
     result = login_coll.delete_many(check)
     # optional - logout app cookies
     #global cookies
@@ -239,8 +247,8 @@ def additem():
     #cookies[login['session']] = login['uid']
 
     check = dict()
-#    is_mem_login = mem_check_login(mem, session)
-    is_mem_login = (None, None)
+    is_mem_login = mem_check_login(mem, session)
+ #   is_mem_login = (None, None)
     print('debug - additem - info - is_mem_login:', is_mem_login)
     if is_mem_login[0] == True:
         docs = [{'uid': is_mem_login[1]}]
@@ -1066,8 +1074,12 @@ def media(mid):
     
 
 
+#@app.before_first_request("init_clients")
 
 
 if __name__ == '__main__':
+    #app.before_first_request(init_clients)
+#    app.before_first_request('init_clients')
+
     #app.run(debug=True)
     app.run(debug=False)
